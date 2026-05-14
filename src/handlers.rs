@@ -1,21 +1,37 @@
+//! HTTP request handlers.
+//!
+//! Bridges the HTTP layer and the database layer. Each handler:
+//! 1. Extracts path parameters from the route context
+//! 2. Parses and validates JSON request bodies
+//! 3. Calls the appropriate database function
+//! 4. Applies CORS headers to the response
+
 use worker::*;
 use serde::de::DeserializeOwned;
 
 use crate::db;
-use crate::models::*;
+use crate::prelude::*;
+use crate::validation::Validator;
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
-/// Parse a JSON request body into the given type, returning a 400 error on failure.
-fn parse_body<T: DeserializeOwned>(req: &Request) -> std::result::Result<T, Response> {
-    match req.json::<T>() {
-        Ok(body) => Ok(body),
+/// Parse a JSON request body into the given type, validate it, and return
+/// the validated struct or a 400 error response.
+fn parse_and_validate<T>(req: &Request) -> std::result::Result<T, Response>
+where
+    T: DeserializeOwned + Validator,
+{
+    let body: T = match req.json::<T>() {
+        Ok(body) => body,
         Err(e) => {
-            let resp = ApiResponse::<()>::error(&format!("Invalid request body: {}", e));
-            Err(Response::from_json(&resp)
-                .unwrap()
-                .with_status(400))
+            let err = AppError::BadRequest(format!("Invalid request body: {}", e));
+            return Err(err.into_response().unwrap());
         }
+    };
+
+    match body.validate() {
+        Ok(()) => Ok(body),
+        Err(e) => Err(e.into_response().unwrap()),
     }
 }
 
@@ -23,8 +39,12 @@ fn parse_body<T: DeserializeOwned>(req: &Request) -> std::result::Result<T, Resp
 fn with_cors(mut resp: Response) -> Response {
     let headers = resp.headers_mut();
     headers.set("Access-Control-Allow-Origin", "*").ok();
-    headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS").ok();
-    headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization").ok();
+    headers
+        .set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        .ok();
+    headers
+        .set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        .ok();
     headers.set("Access-Control-Max-Age", "86400").ok();
     resp
 }
@@ -39,7 +59,7 @@ pub fn handle_options() -> Result<Response> {
 
 pub async fn create_agent(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.env.d1("DB")?;
-    let body = match parse_body::<CreateAgentRequest>(&req) {
+    let body = match parse_and_validate::<CreateAgentRequest>(&req) {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
@@ -63,7 +83,7 @@ pub async fn get_agent(_req: Request, ctx: RouteContext<()>) -> Result<Response>
 pub async fn update_agent(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.env.d1("DB")?;
     let id = ctx.param("id").unwrap_or("");
-    let body = match parse_body::<UpdateAgentRequest>(&req) {
+    let body = match parse_and_validate::<UpdateAgentRequest>(&req) {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
@@ -82,7 +102,7 @@ pub async fn delete_agent(_req: Request, ctx: RouteContext<()>) -> Result<Respon
 
 pub async fn create_owner(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.env.d1("DB")?;
-    let body = match parse_body::<CreateOwnerRequest>(&req) {
+    let body = match parse_and_validate::<CreateOwnerRequest>(&req) {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
@@ -106,7 +126,7 @@ pub async fn get_owner(_req: Request, ctx: RouteContext<()>) -> Result<Response>
 pub async fn update_owner(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.env.d1("DB")?;
     let id = ctx.param("id").unwrap_or("");
-    let body = match parse_body::<UpdateOwnerRequest>(&req) {
+    let body = match parse_and_validate::<UpdateOwnerRequest>(&req) {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
@@ -125,7 +145,7 @@ pub async fn delete_owner(_req: Request, ctx: RouteContext<()>) -> Result<Respon
 
 pub async fn create_chat(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.env.d1("DB")?;
-    let body = match parse_body::<CreateChatRequest>(&req) {
+    let body = match parse_and_validate::<CreateChatRequest>(&req) {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
@@ -149,7 +169,7 @@ pub async fn get_chat_with_messages(_req: Request, ctx: RouteContext<()>) -> Res
 pub async fn update_chat(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.env.d1("DB")?;
     let id = ctx.param("id").unwrap_or("");
-    let body = match parse_body::<UpdateChatRequest>(&req) {
+    let body = match parse_and_validate::<UpdateChatRequest>(&req) {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
@@ -169,7 +189,7 @@ pub async fn delete_chat(_req: Request, ctx: RouteContext<()>) -> Result<Respons
 pub async fn send_message(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.env.d1("DB")?;
     let chat_id = ctx.param("id").unwrap_or("");
-    let body = match parse_body::<SendMessageRequest>(&req) {
+    let body = match parse_and_validate::<SendMessageRequest>(&req) {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };

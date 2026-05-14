@@ -8,12 +8,19 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
+# Cloudflare Workers SDK — HTTP server, D1 bindings, routing, WASM runtime
 worker = "0.4"
+
+# Serialization — JSON request/response handling
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# UUID v4 generation for primary keys
+# `js` feature enables WASM-compatible random number generation
 uuid = { version = "1", features = ["v4", "js"] }
 
 [profile.release]
+# Optimize for minimal WASM binary size (Cloudflare free plan limit: 8 MB)
 lto = true
 opt-level = "s"
 strip = true
