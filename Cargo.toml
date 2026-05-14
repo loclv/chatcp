@@ -1,6 +1,6 @@
 [package]
 name = "chat-app-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "Backend for a chat app where agents and their owners can communicate"
 edition = "2021"
 

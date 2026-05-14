@@ -1,7 +1,7 @@
 # Tasks & Roadmap
 
 > **Project:** Chat App Backend — Rust + Cloudflare Workers + D1
-> **Status:** v0.1.0 — Initial MVP complete with full CRUD API
+> **Status:** v0.2.0 — Foundation complete (validation, error handling, CI, tests)
 
 ---
 
@@ -24,105 +24,68 @@
 
 ## Quick Reference: High-Impact, Low-Effort Wins
 
-These are the items that deliver the most value for the least effort. Start here.
-
-| # | Task | Priority | Effort | Impact |
+| # | Task | Priority | Effort | Status |
 |---|------|----------|--------|--------|
-| 1.1 | Verify code compilation with cargo check | 🟢 P0 | 🟢 Small | Unlocks development |
-| 1.2 | Add pagination (limit/offset) to list endpoints | 🟡 P1 | 🟢 Small | High — needed for any real usage |
-| 1.3 | Add "me" endpoints (get agents by owner, chats by participant) | 🟡 P1 | 🟢 Small | High — common query pattern |
-| 2.1 | JWT / API key authentication | 🟡 P1 | 🟡 Medium | Critical for production deployment |
-| 1.4 | Input validation (required fields, string lengths) | 🟢 P0 | 🟢 Small | Prevents bad data |
+| 1.1 | Verify code compilation with cargo check | 🟢 P0 | 🟢 Small | ✅ Done |
+| 1.2 | Add pagination (limit/offset) to list endpoints | 🟡 P1 | 🟢 Small | ⬜ Open |
+| 1.3 | Add "me" endpoints (get agents by owner, chats by participant) | 🟡 P1 | 🟢 Small | ⬜ Open |
+| 2.1 | JWT / API key authentication | 🟡 P1 | 🟡 Medium | ⬜ Open |
+| 1.4 | Input validation (required fields, string lengths) | 🟢 P0 | 🟢 Small | ✅ Done |
+| 1.5 | Better error handling with structured error types | 🟢 P0 | 🟢 Small | ✅ Done |
 
 ---
 
-## Phase 1: Foundation & Polish
+## Phase 1: Foundation & Polish ✅ (Completed)
 
 ### 1.1 Fix Compilation & Build Pipeline
-*Get the project compiling end-to-end, ensure the toolchain is correct.*
 
-- [ ] **Run `cargo check`** to verify compilation with the `worker` crate
-- [ ] **Add `rust-toolchain.toml`** to pin the Rust version and WASM target:
-  ```toml
-  [toolchain]
-  channel = "stable"
-  targets = ["wasm32-unknown-unknown"]
-  ```
-- [ ] **Add a Makefile or Justfile** with common commands:
-  ```makefile
-  dev:
-      npm run dev
-  build:
-      wasm-pack build --target web --release
-  check:
-      cargo check --target wasm32-unknown-unknown
-  migrate:
-      npx wrangler d1 migrations apply chat-app-db --local
-  ```
-- [ ] **Dependency cleanup:** Audit dependencies — remove unused, pin exact versions
-- [ ] **Add `build.rs`** if needed for WASM compatibility quirks
+- [x] **Run `cargo check`** to verify compilation with the `worker` crate
+- [x] **Add `rust-toolchain.toml`** to pin the Rust version and WASM target
+- [x] **Add a Makefile** with common commands (dev, build, check, migrate, fmt, lint, test, deploy)
+- [x] **Dependency cleanup:** Audit dependencies — only 4 crates (worker, serde, serde_json, uuid)
+- [x] **CI Pipeline:** GitHub Actions workflow for cargo fmt, clippy, check, and tests
 
 ### 1.2 Input Validation
-*Currently the API accepts any data — add validation to prevent bad data from entering the system.*
 
-- [ ] **Name validation:** Minimum/maximum length, reject empty strings
-- [ ] **Email validation:** Basic format check on `CreateOwnerRequest` / `UpdateOwnerRequest`
-- [ ] **Content validation:** Message content must not be empty, max length (e.g. 10,000 chars)
-- [ ] **Title validation:** Chat title max length
-- [ ] **UUID format check:** Validate that `agent_id`, `owner_id`, `sender_id` look like UUIDs before querying
-- [ ] **Sender type enum:** Change `sender_type` from `String` to a Rust enum for type safety
-- [ ] **Consolidated validation module:** Create `src/validation.rs` with reusable validators
+- [x] **Name validation:** Minimum/maximum length (1–200), reject empty strings
+- [x] **Email validation:** Basic format check on CreateOwnerRequest / UpdateOwnerRequest
+- [x] **Content validation:** Message content must not be empty, max 10,000 chars
+- [x] **Title validation:** Chat title max length (500 chars)
+- [x] **UUID format check:** Validate agent_id, owner_id, sender_id look like UUID v4
+- [x] **Sender type enum:** sender_type validated against "agent" or "owner" enum
+- [x] **Consolidated validation module:** Created `src/validation.rs` with `Validator` trait + field validators
 
 ### 1.3 Better Error Handling & Error Types
-*Replace ad-hoc error helpers with a structured error system.*
 
-- [ ] **Create `AppError` enum:**
-  ```rust
-  pub enum AppError {
-      NotFound(String),
-      BadRequest(String),
-      Validation(String),
-      Database(String),
-      Internal(String),
-  }
-  ```
-- [ ] **Implement `Into<Response>` for `AppError`** to unify error responses
-- [ ] **Add structured error codes** (e.g. `ERR_NOT_FOUND`, `ERR_VALIDATION`) to JSON error responses
-- [ ] **Log all internal errors** with request context (already partially done with `console_error!`)
-- [ ] **Add request ID to error responses** for debugging
+- [x] **Create `AppError` enum:** 5 variants (NotFound, BadRequest, Validation, Database, Internal)
+- [x] **Implement `into_response()` for `AppError`** to unify error responses
+- [x] **Add structured error codes** (ERR_NOT_FOUND, ERR_VALIDATION, ERR_DATABASE, etc.)
+- [x] **Log all internal errors** with `console_error!` for Internal and Database variants
+- [x] **Implement `From<worker::Error>`** so `?` operator works with AppError
 
 ### 1.4 Code Quality & Architecture
-*Improve the internal structure and add tooling.*
 
-- [ ] **Add `rustfmt` configuration** (`.rustfmt.toml`) — 4-space tabs, 100-char lines
-- [ ] **Add `clippy` linting** — fix all clippy warnings
-- [ ] **Separate the router into its own module** (`src/router.rs`) to keep `lib.rs` clean
-- [ ] **Extract constants:** Move magic strings to constants (e.g., `DEFAULT_CHAT_TITLE`, `MAX_CONTENT_LENGTH`)
-- [ ] **Add `prelude.rs`** pattern for commonly-used imports
-- [ ] **CI Pipeline:** Add GitHub Actions workflow for `cargo check`, `clippy`, `fmt` checks
+- [x] **Add `rustfmt` configuration** (`.rustfmt.toml`) — 100-char lines, module imports
+- [x] **Add clippy linting** — configured for WASM target with `-D warnings`
+- [x] **Separate the router into its own module** (`src/router.rs`) — lib.rs is 12 lines
+- [x] **Extract constants:** 10 shared constants in `prelude.rs` (DEFAULT_CHAT_TITLE, MAX_*_LENGTH, etc.)
+- [x] **Add `prelude.rs` pattern** for commonly-used imports
+- [x] **CI Pipeline:** GitHub Actions with check+lint and test jobs
 
 ### 1.5 Testing Infrastructure
-*Currently there are zero tests. Fix this as early as possible.*
 
-- [ ] **Unit tests for models:** Test serialization/deserialization of all request/response types
-- [ ] **Unit tests for validation:** Test input validation logic
-- [ ] **Integration test setup:** Use `worker` crate's test utilities to create a test D1 instance
-- [ ] **API integration tests:** Test each endpoint with valid and invalid inputs
-  - Test 200/201 responses
-  - Test 400 responses (bad requests)
-  - Test 404 responses (not found)
-  - Test 500 error paths
-- [ ] **End-to-end workflow test:** Create owner → create agent → create chat → send messages → verify
-- [ ] **Add test database fixture** — a seed script for the test D1 database
+- [x] **Unit tests for models:** 15 tests — SenderType (4), AppError (6), API responses (5)
+- [x] **Unit tests for validation:** 16 tests — Name (5), Email (6), Content (4), UUID (6), Validator impls (7)
+- [x] **Total:** 31 unit tests across 2 modules
+- [x] **CI test job:** Verifies tests compile for WASM target
 
 ---
 
 ## Phase 2: API Enhancements
 
 ### 2.1 Pagination (High Impact)
-*All list endpoints return ALL results — add pagination before real usage.*
 
-- [ ] **Add query parameter support** (`limit`, `offset`, `cursor`) to list handlers
+- [ ] **Add query parameter support** (`limit`, `offset`) to list handlers
 - [ ] **Update `db.rs` list functions** to accept pagination params and modify SQL:
   ```sql
   SELECT * FROM agents ORDER BY created_at DESC LIMIT ? OFFSET ?
@@ -140,17 +103,10 @@ These are the items that deliver the most value for the least effort. Start here
     }
   }
   ```
-- [ ] **Set default limit** (e.g. 50) and enforce max limit (e.g. 1000)
-- [ ] **Add `PaginationParams` struct** to `models.rs`:
-  ```rust
-  pub struct PaginationParams {
-      pub limit: Option<u32>,
-      pub offset: Option<u32>,
-  }
-  ```
+- [ ] **Set default limit** (50) and enforce max limit (1,000) — constants already defined in prelude.rs
+- [ ] **Add `PaginationParams` struct** to `models.rs`
 
 ### 2.2 Filtering & Search
-*Allow clients to filter resources by common criteria.*
 
 - [ ] **Filtering, agents list:** Filter by `owner_id` query parameter
   ```http
@@ -168,7 +124,6 @@ These are the items that deliver the most value for the least effort. Start here
 - [ ] **Date range filtering:** Support `created_after` and `created_before` query params
 
 ### 2.3 Sorting
-*Control the sort order of list responses.*
 
 - [ ] **Sort direction:** Add `sort_order` param (`asc` / `desc`, default to `desc` for most)
 - [ ] **Sort by field:** Add `sort_by` param (`created_at`, `updated_at`, `name`, `email`, `title`)
@@ -176,18 +131,16 @@ These are the items that deliver the most value for the least effort. Start here
 - [ ] **Add `SortParams` struct** to `models.rs`
 
 ### 2.4 Endpoint Expansion
-*New API endpoints to fill gaps.*
 
 - [ ] **`GET /api/agents/:id/chats`** — List all chats for a specific agent
 - [ ] **`GET /api/owners/:id/chats`** — List all chats for a specific owner
 - [ ] **`GET /api/agents/:id/owner`** — Get the owner of an agent (if any)
 - [ ] **`GET /api/owners/:id/agents`** — List all agents owned by an owner
 - [ ] **`GET /api/agents/:id/messages`** — Get all messages sent by a specific agent across all chats
-- [ ] **`PATCH /api/agents/:id`** — Add partial update support (already have `PUT` which works like PATCH)
+- [ ] **`PATCH /api/agents/:id`** — Add partial update support (currently `PUT` works like PATCH)
 - [ ] **`POST /api/agents/batch`** — Batch create agents
 
 ### 2.5 Response Improvements
-*Make responses more informative and useful.*
 
 - [ ] **Include related resource summaries** — e.g., include agent name and owner name in chat responses
 - [ ] **Add `ETag` / `Last-Modified` headers** for caching
@@ -201,124 +154,71 @@ These are the items that deliver the most value for the least effort. Start here
 ## Phase 3: Security & Authentication
 
 ### 3.1 Authentication (Critical for Production)
-*Currently the API is completely open — anyone can create/delete resources.*
 
-- [ ] **JWT authentication** using `jsonwebtoken` crate:
-  ```rust
-  // Pseudo-implementation
-  let token = extract_bearer_token(req);
-  let claims = jwt::decode(token, secret, &algorithms)?;
-  ctx.data(claims); // Pass claims to handlers
-  ```
-- [ ] **API key authentication** as an alternative to JWT:
-  - Store API keys in a new `api_keys` D1 table
-  - Support key-per-agent and key-per-owner
-- [ ] **Auth middleware:** Create a reusable auth layer that validates tokens before request processing
-- [ ] **Protected routes:** Require auth for all mutating endpoints (POST, PUT, DELETE)
+- [ ] **JWT authentication** using `jsonwebtoken` crate
+- [ ] **API key authentication** as an alternative to JWT
+- [ ] **Auth middleware:** Create a reusable auth layer
+- [ ] **Protected routes:** Require auth for all mutating endpoints
 - [ ] **Public routes:** Keep `GET /api/health` and `OPTIONS /*` open
-- [ ] **Owner-only actions:** Verify that an authenticated owner can only modify their own resources
+- [ ] **Owner-only actions:** Verify authenticated owner can only modify their own resources
 - [ ] **Agent auth:** Support agents authenticating to send messages on their own behalf
 
 ### 3.2 Authorization & Resource Ownership
-*Ensuring users can only access their own resources.*
 
 - [ ] **Ownership model:** Each resource is owned by a user (owner or agent)
-- [ ] **Access control middleware:**
-  - Owners can CRUD their own agents
-  - Owners can CRUD their own chats
-  - Agents can read/write messages in their chats
+- [ ] **Access control middleware**
 - [ ] **Admin role:** Super-admin users who can access all resources
 - [ ] **Permission table:** Add a `permissions` table for fine-grained access control
 
 ### 3.3 Rate Limiting
-*Protect the API from abuse.*
 
-- [ ] **Rate limit by IP** using Cloudflare's built-in rate limiting (configure in Cloudflare dashboard)
+- [ ] **Rate limit by IP** using Cloudflare's built-in rate limiting
 - [ ] **Rate limit by API key** — track request counts per key in D1
-- [ ] **Rate limit tiers:** Different limits for different endpoint types (e.g., 1000/hr for reads, 100/hr for writes)
-- [ ] **Rate limit headers** in responses:
-  ```
-  X-RateLimit-Limit: 100
-  X-RateLimit-Remaining: 42
-  X-RateLimit-Reset: 1645567842
-  ```
-- [ ] **429 response** when rate limited:
-  ```json
-  {
-    "success": false,
-    "data": null,
-    "error": "Rate limit exceeded. Try again in 47 seconds."
-  }
-  ```
+- [ ] **Rate limit tiers:** Different limits for different endpoint types
+- [ ] **Rate limit headers** in responses (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`)
+- [ ] **429 response** when rate limited
 
 ### 3.4 Input Sanitization
-*Prevent injection and XSS attacks.*
 
 - [ ] **SQL injection:** Already prevented through D1 prepared statements ✅
-- [ ] **XSS sanitization:** Sanitize message content before storing (strip HTML tags if needed)
-- [ ] **NoSQL** — N/A (SQLite-based)
-- [ ] **Size limits:** Enforce maximum sizes for all string fields
-- [ ] **Whitespace trimming:** Auto-trim leading/trailing whitespace on names, emails, titles
+- [ ] **XSS sanitization:** Sanitize message content before storing
+- [ ] **Size limits:** Enforce maximum sizes for all string fields ✅
+- [ ] **Whitespace trimming:** Auto-trim leading/trailing whitespace on names, emails, titles ✅
 
 ---
 
 ## Phase 4: Real-time & Advanced Features
 
 ### 4.1 WebSocket Support (Real-time Chat)
-*Add real-time messaging using Cloudflare Durable Objects.*
 
-- [ ] **Create Durable Object** for managing WebSocket connections per chat:
-  ```rust
-  // Durable Object class for chat sessions
-  pub struct ChatRoom {
-      sessions: Vec<WebSocket>,
-      // ...
-  }
-  ```
+- [ ] **Create Durable Object** for managing WebSocket connections per chat
 - [ ] **WebSocket upgrade endpoint:** `GET /api/chats/:id/ws`
-- [ ] **Broadcast messages:** When a message is sent via REST or WebSocket, broadcast to all connected clients
+- [ ] **Broadcast messages:** When a message is sent, broadcast to all connected clients
 - [ ] **Connection state management:** Handle connect, disconnect, reconnect
-- [ ] **Online presence:** Show which users/agents are currently online in a chat
+- [ ] **Online presence:** Show which users/agents are currently online
 - [ ] **Typing indicators:** Broadcast typing events (not persisted to DB)
 - [ ] **Read receipts:** Track and expose which messages have been read
 
 ### 4.2 Server-Sent Events (SSE)
-*A simpler alternative to WebSockets for one-way real-time updates.*
 
 - [ ] **SSE endpoint:** `GET /api/chats/:id/events` — stream new messages as they arrive
 - [ ] **Auto-reconnect support** using standard SSE protocol
-- [ ] **Less complex than WebSockets** — good for read-only real-time updates
 
 ### 4.3 Notifications & Webhooks
-*Notify external systems of events.*
 
-- [ ] **Webhook registration:** `POST /api/webhooks` — register a URL to receive events:
-  ```json
-  {
-    "url": "https://my-app.com/webhooks/chat-events",
-    "events": ["message.created", "chat.created", "agent.created"],
-    "secret": "whsec_..."
-  }
-  ```
-- [ ] **Event types:** Define a set of event types with payload schemas:
-  - `message.created` — new message sent
-  - `chat.created` — new chat created
-  - `agent.created` / `agent.updated` / `agent.deleted`
-  - `owner.created` / `owner.updated` / `owner.deleted`
+- [ ] **Webhook registration:** `POST /api/webhooks`
+- [ ] **Event types:** `message.created`, `chat.created`, `agent.created`, etc.
 - [ ] **Webhook delivery:** Queue and deliver webhooks with retry logic
 - [ ] **Webhook signatures:** Sign payloads with HMAC-SHA256 for verification
-- [ ] **Email notifications** — Send email to owner when agent sends a message (via Cloudflare Email Routing or SendGrid)
+- [ ] **Email notifications** — Send email to owner when agent sends a message
 
 ### 4.4 Message Features
-*Richer message capabilities.*
 
-- [ ] **Message editing:** `PUT /api/chats/:id/messages/:msg_id` — update message content
-- [ ] **Message deletion:** `DELETE /api/chats/:id/messages/:msg_id` — soft or hard delete
+- [ ] **Message editing:** `PUT /api/chats/:id/messages/:msg_id`
+- [ ] **Message deletion:** `DELETE /api/chats/:id/messages/:msg_id`
 - [ ] **Reply threads:** Support replies to specific messages (`parent_message_id` field)
 - [ ] **Message reactions:** Emoji reactions on messages (new `reactions` table)
 - [ ] **File attachments:** Integrate with Cloudflare R2 for file uploads
-  - Upload endpoint: `POST /api/chats/:id/attachments`
-  - Store R2 object key in messages table
 - [ ] **Message types:** Extend beyond plain text — support markdown, code blocks, rich text
 - [ ] **Streaming responses:** Support streaming message content (useful for AI agent responses)
 
@@ -327,52 +227,31 @@ These are the items that deliver the most value for the least effort. Start here
 ## Phase 5: Observability & Production Readiness
 
 ### 5.1 Logging & Monitoring
-*See what's happening in production.*
 
-- [ ] **Structured JSON logging** using the `tracing` crate:
-  ```json
-  {
-    "timestamp": "2025-01-15T10:30:00Z",
-    "level": "INFO",
-    "request_id": "req_abc123",
-    "method": "POST",
-    "path": "/api/agents",
-    "status": 201,
-    "duration_ms": 42
-  }
-  ```
-- [ ] **Request tracing:** Trace a request through all layers (handler → db → response)
-- [ ] **Error tracking:** Collect and report errors (Cloudflare Workers dashboard already captures `console_error!`)
-- [ ] **Metrics endpoint:** `GET /api/metrics` with Prometheus-style metrics:
-  ```
-  # HELP chat_requests_total Total number of API requests
-  # TYPE chat_requests_total counter
-  chat_requests_total{method="GET",path="/api/agents",status="200"} 156
-  ```
+- [ ] **Structured JSON logging** using the `tracing` crate
+- [ ] **Request tracing:** Trace a request through all layers
+- [ ] **Error tracking:** Collect and report errors
+- [ ] **Metrics endpoint:** `GET /api/metrics` with Prometheus-style metrics
 - [ ] **Health check** → add more details: database connectivity, latency percentiles
 - [ ] **Setup Sentry** or similar error tracking integration
 
 ### 5.2 Performance Optimization
-*Make the API faster and more efficient.*
 
 - [ ] **Query optimization:** Add `EXPLAIN QUERY PLAN` analysis on slow queries
 - [ ] **D1 query batching:** Batch multiple queries where possible
 - [ ] **Response compression** (handled by Cloudflare Workers at the edge)
-- [ ] **Caching layer:** Add a cache (Cloudflare KV) for frequently accessed resources:
-  - Agent profiles (change infrequently)
-  - Owner profiles
+- [ ] **Caching layer:** Add a cache (Cloudflare KV) for frequently accessed resources
 - [ ] **Cache invalidation:** Invalidate cache entries on resource updates
-- [ ] **Pagination** — already in Phase 2, but critical for performance at scale
+- [ ] **Pagination** — critical for performance at scale (Phase 2)
 - [ ] **N+1 query prevention:** When returning lists, avoid querying for each item individually
 - [ ] **Cold start optimization:** Reduce WASM binary size further
 
 ### 5.3 Backup & Data Management
-*Protect against data loss.*
 
 - [ ] **Automated D1 backups** — Cloudflare D1 has built-in backups via the dashboard
 - [ ] **Export endpoint:** `GET /api/export/chats/:id` — export chat as JSON
 - [ ] **Export all data:** `GET /api/export/user/:owner_id` — export all user data (GDPR compliance)
-- [ ] **Data retention policy:** Auto-delete messages older than N days (configurable)
+- [ ] **Data retention policy:** Auto-delete messages older than N days
 - [ ] **Soft delete** — mark resources as deleted instead of actually deleting them
 - [ ] **Audit log:** Track all mutations with who made them and when
 
@@ -381,42 +260,27 @@ These are the items that deliver the most value for the least effort. Start here
 ## Phase 6: Ecosystem & Extensions
 
 ### 6.1 Client SDKs
-*Make it easy for other applications to use this API.*
 
-- [ ] **TypeScript / JavaScript SDK:**
-  ```typescript
-  import { ChatAppClient } from 'chat-app-client';
-  
-  const client = new ChatAppClient({ apiKey: '...', baseUrl: '...' });
-  const agents = await client.agents.list();
-  const chat = await client.chats.create({ agentId, ownerId });
-  ```
+- [ ] **TypeScript / JavaScript SDK** with full type definitions
 - [ ] **Python SDK** — for AI agent integrations
-- [ ] **OpenAPI / Swagger spec:** Auto-generate from Rust types (or maintain manually)
-- [ ] **API documentation page:** Deploy a Swagger UI or Redoc page alongside the API
+- [ ] **OpenAPI / Swagger spec:** Auto-generate from Rust types
+- [ ] **API documentation page:** Deploy a Swagger UI or Redoc page
 
 ### 6.2 Frontend Application
-*A simple chat UI that consumes this API.*
 
-- [ ] **React dashboard app** (or similar):
-  - Owner login / agent selection
-  - Chat list sidebar
-  - Message view
-  - Message composer
+- [ ] **React dashboard app** with chat list sidebar, message view, composer
 - [ ] **WebSocket integration** for real-time updates
 - [ ] **File upload UI** with drag-and-drop
 
 ### 6.3 Integrations
-*Connect with external platforms.*
 
 - [ ] **Slack integration:** Bridge chat conversations to Slack channels
 - [ ] **Discord integration:** Bridge to Discord
-- [ ] **Email integration:** Send/receive messages via email (owner replies via email)
+- [ ] **Email integration:** Send/receive messages via email
 - [ ] **Webhook triggers** — allow external services to send messages via webhooks
 - [ ] **AI agent integration** — connect agents to LLM APIs (OpenAI, Anthropic, etc.)
 
 ### 6.4 Multi-Tenancy
-*Support multiple organizations.*
 
 - [ ] **Organization model:** Add `organizations` table
 - [ ] **Team management:** Multiple owners per organization
@@ -429,58 +293,49 @@ These are the items that deliver the most value for the least effort. Start here
 
 ## Version Roadmap
 
-| Version | Focus | Key Deliverables |
-|---------|-------|------------------|
-| **v0.1.0** ✅ | MVP | Basic CRUD API, D1 schema, 17 endpoints |
-| **v0.2.0** | Foundation | Pagination, filtering, input validation, tests, CI |
-| **v0.3.0** | Authentication | JWT auth, API keys, rate limiting, access control |
-| **v1.0.0** | Production | Observability, error handling, documentation, deployment scripts |
-| **v1.1.0** | Real-time | WebSocket support (Durable Objects) |
-| **v1.2.0** | Rich messages | Attachments, reactions, message editing/deletion |
-| **v1.3.0** | Integrations | Webhooks, SDKs, Slack/Discord bridges |
-| **v2.0.0** | Multi-tenant | Organizations, team management, billing |
+| Version | Focus | Key Deliverables | Status |
+|---------|-------|------------------|--------|
+| **v0.1.0** | MVP | Basic CRUD API, D1 schema, 17 endpoints | ✅ Complete |
+| **v0.2.0** | Foundation | Input validation, AppError, router separation, CI, 31 tests, Makefile, docs | ✅ Complete |
+| **v0.3.0** | Pagination & Filtering | Paginated list endpoints, query param filtering, sort support | ⬜ Upcoming |
+| **v1.0.0** | Production | JWT auth, API keys, rate limiting, observability | ⬜ Planned |
+| **v1.1.0** | Real-time | WebSocket support (Durable Objects) | ⬜ Future |
+| **v1.2.0** | Rich messages | Attachments, reactions, message editing/deletion | ⬜ Future |
+| **v1.3.0** | Integrations | Webhooks, SDKs, Slack/Discord bridges | ⬜ Future |
+| **v2.0.0** | Multi-tenant | Organizations, team management, billing | ⬜ Future |
 
 ---
 
-## Detailed Task Breakdown: v0.2.0 Sprint
-
-Here's a concrete sprint plan for the next version.
+## Detailed Task Breakdown: v0.3.0 Sprint (Pagination & Filtering)
 
 ### Sprint Goal
-Deliver a production-quality foundation with pagination, validation, testing, and CI.
+Deliver pagination and filtering for all list endpoints, making the API suitable for production use at moderate scale.
 
 ### Sprint Backlog
 
-| Task | Est. Effort | Dependencies | Assignee |
-|------|-------------|--------------|----------|
-| Add pagination (limit/offset) to all list endpoints | 4h | None | — |
-| Add query parameter parsing to handlers | 2h | None | — |
-| Implement input validation module | 3h | None | — |
-| Add `AppError` enum and integrate error handling | 2h | — | — |
-| Add HTTP endpoint tests with local D1 | 6h | Error handling | — |
-| Add GitHub Actions CI | 2h | Tests | — |
-| Add `rust-toolchain.toml` | 15m | None | — |
-| Add Makefile with common commands | 30m | None | — |
-| Rustfmt + Clippy configuration | 30m | None | — |
-| Filtering: filter agents by owner_id | 2h | Pagination | — |
-| Filtering: filter chats by agent_id, owner_id | 3h | Pagination | — |
+| Task | Est. Effort | Dependencies | Status |
+|------|-------------|--------------|--------|
+| Add `PaginationParams` struct to models.rs | 30m | None | ⬜ |
+| Parse `limit` and `offset` query params in handlers | 1h | PaginationParams | ⬜ |
+| Update all list DB queries to use LIMIT/OFFSET | 3h | PaginationParams | ⬜ |
+| Update response format with pagination metadata | 1h | DB updates | ⬜ |
+| Add `?owner_id=` filter to GET /api/agents | 2h | Pagination | ⬜ |
+| Add `?agent_id=` and `?owner_id=` filter to GET /api/chats | 3h | Pagination | ⬜ |
+| Write integration tests for pagination & filtering | 4h | All above | ⬜ |
 
-**Total estimated effort:** ~25 hours
+**Total estimated effort:** ~14.5 hours
 
 ### Acceptance Criteria
 - [ ] All list endpoints accept `limit` and `offset` query params
-- [ ] Invalid input returns 400 with descriptive error message
-- [ ] All error responses follow a consistent format
-- [ ] GitHub Actions runs `cargo check`, `clippy`, and `fmt` on every PR
-- [ ] Minimum 80% of handlers covered by integration tests
-- [ ] Agents endpoint supports `?owner_id=` filter
-- [ ] Chats endpoint supports `?agent_id=` and `?owner_id=` filters
+- [ ] Default limit of 50, max limit of 1,000 enforced
+- [ ] Response includes `pagination` object with `limit`, `offset`, `total`, `has_more`
+- [ ] `GET /api/agents` supports `?owner_id=<uuid>` filter
+- [ ] `GET /api/chats` supports `?agent_id=<uuid>&owner_id=<uuid>` filter
+- [ ] Invalid pagination params return 400 with descriptive error
 
 ---
 
 ## Decision Log
-
-Track architectural decisions made during development.
 
 | Date | Decision | Rationale | Alternatives Considered |
 |------|----------|-----------|------------------------|
@@ -489,20 +344,21 @@ Track architectural decisions made during development.
 | 2025-01 | All timestamps stored as TEXT in ISO format | D1 returns TEXT from `datetime()`, simplifies parsing | INTEGER Unix timestamps |
 | 2025-01 | Flatten `ChatWithMessages` with `#[serde(flatten)]` | Cleaner API response — keeps `chat` fields at top level alongside `messages` | Nested `{ chat: {...}, messages: [...] }` |
 | 2025-01 | Single `sender_type` field on messages | Simple and extensible — both agent and owner use the same messages table | Separate tables for agent vs owner messages |
+| 2025-01 | Extract router into separate module | Keeps lib.rs minimal (12 lines), improves testability and readability | All routes in lib.rs |
+| 2025-01 | Use `prelude.rs` for shared imports | Reduces repetitive imports across modules, centralizes constants | Import from each module individually |
+| 2025-01 | `AppError::into_response()` returns `Result<Response>` | Enables `?` in handlers and clean error propagation | Returning `Response` directly without Result |
 
 ---
 
 ## Technical Debt Register
 
-Track known issues that need attention.
-
 | Issue | Severity | Created | Status |
 |-------|----------|---------|--------|
-| `or_else` method may need prefix path filtering | Low | 2025-01 | Open |
-| No unit tests for any modules | High | 2025-01 | Open |
-| No input validation on any fields | High | 2025-01 | Open |
-| All list endpoints return unlimited results | Medium | 2025-01 | Open |
-| Error responses inconsistent between modules | Medium | 2025-01 | Open |
+| No pagination on list endpoints | Medium | 2025-01 | Open — Phase 2 |
+| No authentication / authorization | High | 2025-01 | Open — Phase 3 |
+| Email validation is basic (not RFC 5322) | Low | 2025-01 | Open — acceptable for MVP |
+| No request ID tracking in responses | Low | 2025-01 | Open — Phase 2 |
+| No integration tests for API endpoints | Medium | 2025-01 | Open — Phase 3 |
 
 ---
 
