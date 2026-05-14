@@ -1,0 +1,13 @@
+{
+  "name": "chat-app-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate": "wrangler d1 migrations apply chat-app-db"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

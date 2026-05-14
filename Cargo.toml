@@ -1,0 +1,20 @@
+[package]
+name = "chat-app-backend"
+version = "0.1.0"
+description = "Backend for a chat app where agents and their owners can communicate"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+worker = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "js"] }
+
+[profile.release]
+lto = true
+opt-level = "s"
+strip = true
+codegen-units = 1
