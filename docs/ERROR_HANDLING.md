@@ -1,6 +1,7 @@
 # Error Handling & Validation
 
-> **Version:** v0.2.0 — Structured error handling with AppError enum
+> **Version:** v0.2.0 — Structured error handling with AppError enum  
+> **CLI:** Errors propagate to the CLI client with HTTP status codes and error codes — see [cli/README.md](../cli/README.md)
 
 ---
 

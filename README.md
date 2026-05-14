@@ -1,9 +1,11 @@
 # Chat App Backend
 
-A serverless backend for a multi-agent chat application built with **Rust**, **Cloudflare Workers**, and **Cloudflare D1**. This API enables agents and their human owners to create and manage conversations through a RESTful interface.
+A serverless backend for a multi-agent chat application built with **Rust**, **Cloudflare Workers**, and **Cloudflare D1**. Comes with a **Rust CLI client** for chatting from the terminal. This API enables agents and their human owners to create and manage conversations through a RESTful interface.
 
 **Current version:** v0.2.0 — Foundation & Polish  
 **Status:** ✅ Compilation verified · ✅ Input validation · ✅ Structured errors · ✅ CI/CD · ✅ 31 unit tests
+
+📦 **New in v0.2.0:** [`cli/`](./cli) — a Rust terminal client with both quick commands and an interactive REPL
 
 ---
 
@@ -19,6 +21,7 @@ A serverless backend for a multi-agent chat application built with **Rust**, **C
 - [Input Validation](#input-validation)
 - [Error Handling](#error-handling)
 - [API Reference](#api-reference)
+- [CLI Client](#cli-client)
 - [Development](#development)
 - [Testing](#testing)
 - [CI/CD Pipeline](#cicd-pipeline)
@@ -33,8 +36,8 @@ A serverless backend for a multi-agent chat application built with **Rust**, **C
 
 ```
                         ┌─────────────────────────────────┐
-                        │        Client Application        │
-                        │   (Web, Mobile, CLI, Agent)      │
+                        │   Chat CLI (Rust Terminal Client) │
+                        │   cli/ — quick commands / REPL   │
                         └──────────┬──────────────────────┘
                                    │ HTTP REST API
                                    ▼
@@ -64,9 +67,7 @@ A serverless backend for a multi-agent chat application built with **Rust**, **C
                          └─────────────────────────┘
 ```
 
-The backend runs as a **Cloudflare Worker** — a serverless function deployed to Cloudflare's global edge network.
-
-**Request lifecycle:**
+The backend runs as a **Cloudflare Worker** — a serverless function deployed to Cloudflare's global edge network. The **Chat CLI** (`cli/`) is the official terminal client, supporting both one-shot commands and an interactive REPL.
 1. Incoming HTTP request hits the Worker
 2. `lib.rs` creates the router from `router.rs` and dispatches
 3. Router matches the path to the appropriate `handler` in `handlers.rs`
@@ -87,6 +88,9 @@ The backend runs as a **Cloudflare Worker** — a serverless function deployed t
 | **Cloudflare Workers** | Serverless execution environment at the edge | — |
 | **Cloudflare D1** | Serverless SQLite database with global replication | — |
 | **wrangler** | Cloudflare Workers CLI for dev, build, deploy | ^3.0 |
+| **clap** | CLI argument parsing (chat-cli) | 4 (with derive) |
+| **reqwest** | HTTP client for the CLI | 0.12 (with rustls-tls) |
+| **prettytable-rs** | ASCII table formatting (chat-cli) | 0.10 |
 
 ---
 
@@ -95,7 +99,7 @@ The backend runs as a **Cloudflare Worker** — a serverless function deployed t
 - **Rust toolchain** — Install via [rustup](https://rustup.rs/)
   ```bash
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  rustup target add wasm32-unknown-unknown
+  rustup target add wasm32-unknown-unknown  # only for backend
   ```
 - **Node.js & npm** — v18 or later
 - **Wrangler CLI** — installed via `npm install` (dev dependency)
@@ -106,42 +110,38 @@ The backend runs as a **Cloudflare Worker** — a serverless function deployed t
 
 ## Quick Start
 
-### 1. Clone and install dependencies
+### Backend
 
 ```bash
-git clone <your-repo-url> chat-app-backend
+# Terminal 1 — Backend
 cd chat-app-backend
 npm install
-```
-
-### 2. Create the D1 database
-
-```bash
 npx wrangler d1 create chat-app-db
-```
-
-Copy the output `database_id` into `wrangler.toml`:
-```toml
-database_id = "your-uuid-here"    # ← Replace this
-```
-
-### 3. Run the database migration
-
-```bash
+# Copy the database_id into wrangler.toml, then:
 make migrate
-# or: npx wrangler d1 migrations apply chat-app-db --local
-```
-
-### 4. Start the development server
-
-```bash
 make dev
-# or: npm run dev
 ```
 
 The server starts at `http://localhost:8787`.
 
-### 5. Verify it works
+### CLI (in another terminal)
+
+```bash
+# Terminal 2 — CLI client
+cd cli
+cargo run -- health
+# ✓ Backend is ok (chat-app-backend v0.2.0)
+
+cargo run -- create owner --name "Alice" --email "alice@example.com"
+cargo run -- create agent --name "CodeBot" --description "AI coding assistant"
+cargo run -- create chat --agent-id <agent-uuid> --owner-id <owner-uuid> --title "Debug help"
+cargo run -- send --chat-id <chat-uuid> --as-type owner --sender-id <owner-uuid> --text "Hello!"
+
+# Or jump into the interactive REPL
+cargo run -- repl
+```
+
+### Verify with curl
 
 ```bash
 curl http://localhost:8787/api/health
@@ -155,7 +155,7 @@ curl http://localhost:8787/api/health
 ```
 chat-app-backend/
 │
-├── Cargo.toml                    # Rust project manifest and dependencies
+├── Cargo.toml                    # Backend Rust manifest (cdylib for WASM)
 ├── wrangler.toml                  # Cloudflare Workers configuration
 ├── package.json                   # Node.js project manifest with wrangler scripts
 ├── Makefile                       # Common commands (dev, build, test, lint, deploy)
@@ -163,13 +163,25 @@ chat-app-backend/
 ├── .rustfmt.toml                  # Rust formatting rules (100-char lines, module imports)
 ├── .gitignore                     # Git ignore rules
 ├── README.md                      # This file
+├── tasks.md                       # Roadmap & improvement plan
 │
-├── .github/
-│   └── workflows/
-│       └── ci.yml                 # CI pipeline: fmt → clippy → build → test
+├── .github/workflows/
+│   └── ci.yml                     # CI pipeline: fmt → clippy → build → test
 │
 ├── migrations/
 │   └── 0001_initial.sql           # D1 schema migration (4 tables + 5 indexes)
+│
+├── cli/                           # 🆕 Rust terminal client (separate crate)
+│   ├── Cargo.toml                 # CLI manifest (binary, native target)
+│   ├── README.md                  # CLI-specific documentation
+│   ├── .gitignore
+│   └── src/
+│       ├── main.rs                # Entry point + clap argument parsing (~230 lines)
+│       ├── client.rs              # HTTP API client for all 17 endpoints
+│       ├── config.rs              # Configuration (env vars, default URL)
+│       ├── display.rs             # Pretty-printing (tables, colors, errors)
+│       ├── models.rs              # Response types matching the backend API
+│       └── repl.rs                # Interactive REPL mode (~340 lines)
 │
 ├── docs/                          # Detailed documentation
 │   ├── ARCHITECTURE.md            # Architecture deep dive
@@ -177,15 +189,16 @@ chat-app-backend/
 │   ├── ERROR_HANDLING.md          # Error handling & validation guide
 │   └── DEVELOPMENT.md             # Development workflow & tooling
 │
-└── src/
-    ├── lib.rs                     # Worker entry point — imports modules, creates router
-    ├── router.rs                  # Route definitions — maps paths to handlers
-    ├── handlers.rs                # HTTP layer — request parsing, CORS, validation dispatch
-    ├── validation.rs              # Input validation — Validator trait, field validators
-    ├── models.rs                  # Data models — structs, enums, API response types
-    ├── db.rs                      # D1 database operations — CRUD for all entities
-    └── prelude.rs                 # Common imports & constants — shared across modules
-```
+├── src/                           # Backend worker source
+│   ├── lib.rs                     # Worker entry point (12 lines)
+│   ├── router.rs                  # Route definitions
+│   ├── handlers.rs                # HTTP layer — parsing, CORS, validation dispatch
+│   ├── validation.rs              # Validator trait + field validators + 16 tests
+│   ├── models.rs                  # Data structures, AppError, SenderType + 15 tests
+│   ├── db.rs                      # D1 database CRUD operations
+│   └── prelude.rs                 # Common imports & constants
+│
+└── tests/                         # (tests are inline in src/)
 
 ### Module Responsibilities
 
@@ -408,9 +421,54 @@ Structured error handling via the `AppError` enum (`src/models.rs`):
 
 ---
 
+## CLI Client
+
+The `cli/` directory contains a full-featured Rust terminal client that communicates with the backend via HTTP. It supports two modes:
+
+### Quick Commmands
+
+Use for one-off operations or scripting:
+
+```bash
+cargo run -- health              # Check backend status
+cargo run -- list agents         # List all agents
+cargo run -- create owner --name "Alice" --email "alice@example.com"
+cargo run -- create agent --name "CodeBot" --description "AI assistant"
+cargo run -- send --chat-id <id> --as-type owner --sender-id <id> --text "Hello"
+cargo run -- messages --chat-id <id>  # View messages
+cargo run -- delete agent <id>   # Delete a resource
+```
+
+All 17 backend endpoints are available as CLI commands. See [`cli/README.md`](cli/README.md) for the full reference.
+
+### Interactive REPL
+
+For an immersive chat experience:
+
+```bash
+cargo run -- repl
+```
+
+In REPL mode you can browse chats with `/list`, select one with `/select <n>`, type messages directly, create new chats with `/new`, and more. See the [CLI README](cli/README.md#interactive-repl) for a full demo.
+
+### Configuration
+
+Set the backend URL via environment variable or the `--api-url` flag:
+
+```bash
+# Default: http://localhost:8787
+export CHAT_API_URL=https://my-worker.workers.dev
+cargo run -- health
+
+# Or per-command:
+cargo run -- --api-url https://my-worker.workers.dev list agents
+```
+
+---
+
 ## Development
 
-### Available Commands (Makefile)
+### Backend Commands (Makefile)
 
 ```bash
 make dev              # Start dev server (wrangler)
@@ -427,14 +485,27 @@ make deploy           # Deploy to Cloudflare
 make clean            # Clean build artifacts
 ```
 
+### CLI Development
+
+The CLI is a separate Rust crate with its own `Cargo.toml`:
+
+```bash
+cd cli
+cargo check              # Check compilation
+cargo run -- health      # Quick test with running backend
+cargo build --release    # Build for production
+```
+
+No special WASM target needed — the CLI compiles natively for your platform.
+
 ### Code Quality
 
 - **Formatting:** `cargo fmt` with rules in `.rustfmt.toml` (100-char lines, module imports)
-- **Linting:** `cargo clippy` with `-D warnings` for WASM target
+- **Linting:** `cargo clippy` with `-D warnings` for WASM target (backend) or native (CLI)
 - **Constants:** All magic strings/numbers in `src/prelude.rs` (10 shared constants)
 - **Imports:** `use crate::prelude::*;` pattern for commonly-used types
 
-### Adding New Dependencies
+### Adding Backend Dependencies
 
 Ensure compatibility with `wasm32-unknown-unknown`:
 - ✅ Pure Rust crates (serde, serde_json)

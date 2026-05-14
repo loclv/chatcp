@@ -1,6 +1,7 @@
 # Development Guide
 
 > **Project:** Chat App Backend — Rust + Cloudflare Workers + D1  
+> **CLI:** `cli/` — Rust terminal client (separate crate)  
 > **Version:** v0.2.0
 
 ---
@@ -140,6 +141,25 @@ Ignores: Rust build artifacts (`target/`, `Cargo.lock`), wrangler builds (`build
 | `make migrate-remote` | Apply D1 migrations to prod | Before deployment |
 | `make deploy` | Build + deploy to Cloudflare | Release |
 | `make clean` | Remove build artifacts | When things get stale |
+
+### CLI Development
+
+The CLI is a separate Rust crate in `cli/`. It compiles natively (no WASM target needed):
+
+```bash
+# Check compilation
+cd cli && cargo check
+
+# Run with a running backend
+cd cli && cargo run -- health
+cd cli && cargo run -- list agents
+cd cli && cargo run -- repl
+
+# Build release binary
+cd cli && cargo build --release
+```
+
+The CLI binary lives at `cli/target/release/chat-cli` when built. No Makefile integration needed — the CLI is fully independent of the backend build system.
 
 ---
 

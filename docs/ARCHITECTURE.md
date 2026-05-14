@@ -1,6 +1,7 @@
 # Architecture
 
-> **Project:** Chat App Backend — Rust + Cloudflare Workers + D1
+> **Project:** Chat App Backend — Rust + Cloudflare Workers + D1  
+> **CLI:** [`cli/`](../cli) — Rust terminal client (separate crate)  
 > **Version:** v0.2.0
 
 ---
@@ -9,13 +10,22 @@
 
 The backend is a **serverless REST API** deployed to Cloudflare's global edge network. It uses a layered architecture with clear separation of concerns between HTTP handling, business logic, and data access.
 
+The project includes two separate Rust crates:
+- **`chat-app-backend`** — the backend Worker (compiles to WASM, deployed to Cloudflare)
+- **`chat-cli`** — the terminal client (compiles natively, runs on your machine)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Client Application                       │
-│          (Web App, Mobile App, CLI, AI Agent)                │
-└────────────────────────┬────────────────────────────────────┘
-                         │ HTTPS
-                         ▼
+│  ┌─────────────────┐  ┌──────────────────┐                  │
+│  │   Chat CLI      │  │  Other Clients    │                 │
+│  │  (cli/ crate)   │  │  (Web, Mobile…)   │                 │
+│  │  quick cmds /   │  │  HTTP clients     │                 │
+│  │  interactive    │  │                   │                 │
+│  │  REPL           │  │                   │                 │
+│  └────────┬────────┘  └────────┬─────────┘                  │
+└───────────┼────────────────────┼────────────────────────────┘
+            │                    │ HTTPS
+            ▼                    ▼
 ┌─────────────────────────────────────────────────────────────┐
 │             Cloudflare Edge Network (200+ locations)         │
 │  ┌───────────────────────────────────────────────────────┐  │

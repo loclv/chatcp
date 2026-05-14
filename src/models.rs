@@ -19,6 +19,8 @@ impl SenderType {
         }
     }
 
+    /// Parse a sender type from a string.
+    #[allow(unused)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
             "agent" => Some(SenderType::Agent),

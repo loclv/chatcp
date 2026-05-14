@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Cloudflare Workers SDK — HTTP server, D1 bindings, routing, WASM runtime
-worker = "0.4"
+worker = { version = "0.4", features = ["d1"] }
 
 # Serialization — JSON request/response handling
 serde = { version = "1", features = ["derive"] }

@@ -2,7 +2,8 @@
 
 > **Base URL (local):** `http://localhost:8787`  
 > **Base URL (production):** `https://chat-app-backend.<your-subdomain>.workers.dev`  
-> **Version:** v0.2.0
+> **Version:** v0.2.0  
+> **CLI:** Use `cargo run -- <command>` from `cli/` — see [cli/README.md](../cli/README.md)
 
 ---
 

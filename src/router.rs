@@ -8,7 +8,7 @@ use worker::*;
 use crate::handlers;
 
 /// Build and return the configured HTTP router with all routes registered.
-pub fn build_router() -> Router<()> {
+pub fn build_router() -> Router<'static, ()> {
     let router = Router::new();
 
     router
@@ -52,7 +52,7 @@ pub fn build_router() -> Router<()> {
         .get_async("/api/chats/:id/messages", handlers::get_messages)
 
         // ─── 404 fallback ────────────────────────────────────────────────────
-        .or_else(|_req, _ctx| async move {
+        .or_else_any_method_async("/*", |_req, _ctx| async move {
             Response::error("Not Found", 404)
         })
 }

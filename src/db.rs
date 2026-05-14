@@ -1,3 +1,4 @@
+use wasm_bindgen::JsValue;
 use worker::*;
 use uuid::Uuid;
 
@@ -10,11 +11,63 @@ pub fn generate_id() -> String {
     Uuid::new_v4().to_string()
 }
 
-/// Convert an `Option<String>` to a `D1Value` (NULL if None).
-fn optional_d1_value(opt: &Option<String>) -> D1Value {
+/// Convert an `Option<String>` to a `JsValue` (null if None).
+fn optional_js_value(opt: &Option<String>) -> JsValue {
     match opt {
-        Some(val) => val.as_str().into(),
-        None => D1Value::Null,
+        Some(val) => JsValue::from_str(val.as_str()),
+        None => JsValue::null(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_id_is_uuid_format() {
+        let id = generate_id();
+        // UUID v4 format: 8-4-4-4-12 hex chars (36 total)
+        assert_eq!(id.len(), 36);
+        let bytes = id.as_bytes();
+        assert_eq!(bytes[8], b'-');
+        assert_eq!(bytes[13], b'-');
+        assert_eq!(bytes[18], b'-');
+        assert_eq!(bytes[23], b'-');
+        // Version nibble should be '4'
+        assert_eq!(bytes[14], b'4');
+    }
+
+    #[test]
+    fn test_generate_id_is_unique() {
+        let id1 = generate_id();
+        let id2 = generate_id();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_generate_id_hex_characters() {
+        let id = generate_id();
+        let bytes = id.as_bytes();
+        for (i, &b) in bytes.iter().enumerate() {
+            if i == 8 || i == 13 || i == 18 || i == 23 {
+                continue; // dashes
+            }
+            assert!(b.is_ascii_hexdigit(), "Non-hex char '{}' at pos {}", b as char, i);
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[test]
+    fn test_optional_js_value_some() {
+        let result = optional_js_value(&Some("hello".to_string()));
+        assert_eq!(result.as_string(), Some("hello".to_string()));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[test]
+    fn test_optional_js_value_none() {
+        let result = optional_js_value(&None);
+        assert!(result.is_null());
     }
 }
 
@@ -33,7 +86,7 @@ pub async fn create_agent(d1: &D1Database, req: &CreateAgentRequest) -> Result<R
             id.as_str().into(),
             req.name.as_str().into(),
             description.into(),
-            optional_d1_value(&req.owner_id),
+            optional_js_value(&req.owner_id),
         ])?
         .run()
         .await;
@@ -55,15 +108,16 @@ pub async fn create_agent(d1: &D1Database, req: &CreateAgentRequest) -> Result<R
 pub async fn list_agents(d1: &D1Database) -> Result<Response> {
     let result = d1
         .prepare("SELECT * FROM agents ORDER BY created_at DESC")
-        .all::<Agent>()
+        .all()
         .await;
 
     match result {
         Ok(agents) => {
-            let results = agents.results();
+            let results: Vec<Agent> = agents.results()?;
+            let total = results.len();
             let resp = PaginatedResponse {
                 success: true,
-                total: results.len(),
+                total,
                 data: results,
             };
             Response::from_json(&resp)
@@ -87,7 +141,7 @@ async fn get_agent_by_id(d1: &D1Database, id: &str) -> Result<Option<Agent>> {
     let result = d1
         .prepare("SELECT * FROM agents WHERE id = ?")
         .bind(&[id.into()])?
-        .first::<Agent>()
+        .first::<Agent>(None)
         .await?;
     Ok(result)
 }
@@ -108,7 +162,7 @@ pub async fn update_agent(d1: &D1Database, id: &str, req: &UpdateAgentRequest) -
         .bind(&[
             name.into(),
             description.into(),
-            optional_d1_value(&req.owner_id),
+            optional_js_value(&req.owner_id),
             id.into(),
         ])?
         .run()
@@ -129,7 +183,8 @@ pub async fn delete_agent(d1: &D1Database, id: &str) -> Result<Response> {
 
     match result {
         Ok(meta) => {
-            if meta.changes() > 0 {
+            let changes = meta.meta()?.and_then(|m| m.changes).unwrap_or(0);
+            if changes > 0 {
                 let resp = ApiResponse::success(serde_json::json!({"deleted": true}));
                 Response::from_json(&resp)
             } else {
@@ -175,15 +230,16 @@ pub async fn create_owner(d1: &D1Database, req: &CreateOwnerRequest) -> Result<R
 pub async fn list_owners(d1: &D1Database) -> Result<Response> {
     let result = d1
         .prepare("SELECT * FROM owners ORDER BY created_at DESC")
-        .all::<Owner>()
+        .all()
         .await;
 
     match result {
         Ok(owners) => {
-            let results = owners.results();
+            let results: Vec<Owner> = owners.results()?;
+            let total = results.len();
             let resp = PaginatedResponse {
                 success: true,
-                total: results.len(),
+                total,
                 data: results,
             };
             Response::from_json(&resp)
@@ -207,7 +263,7 @@ async fn get_owner_by_id(d1: &D1Database, id: &str) -> Result<Option<Owner>> {
     let result = d1
         .prepare("SELECT * FROM owners WHERE id = ?")
         .bind(&[id.into()])?
-        .first::<Owner>()
+        .first::<Owner>(None)
         .await?;
     Ok(result)
 }
@@ -242,7 +298,8 @@ pub async fn delete_owner(d1: &D1Database, id: &str) -> Result<Response> {
 
     match result {
         Ok(meta) => {
-            if meta.changes() > 0 {
+            let changes = meta.meta()?.and_then(|m| m.changes).unwrap_or(0);
+            if changes > 0 {
                 let resp = ApiResponse::success(serde_json::json!({"deleted": true}));
                 Response::from_json(&resp)
             } else {
@@ -288,15 +345,16 @@ pub async fn create_chat(d1: &D1Database, req: &CreateChatRequest) -> Result<Res
 pub async fn list_chats(d1: &D1Database) -> Result<Response> {
     let result = d1
         .prepare("SELECT * FROM chats ORDER BY updated_at DESC")
-        .all::<Chat>()
+        .all()
         .await;
 
     match result {
         Ok(chats) => {
-            let results = chats.results();
+            let results: Vec<Chat> = chats.results()?;
+            let total = results.len();
             let resp = PaginatedResponse {
                 success: true,
-                total: results.len(),
+                total,
                 data: results,
             };
             Response::from_json(&resp)
@@ -309,7 +367,7 @@ async fn get_chat_by_id(d1: &D1Database, id: &str) -> Result<Option<Chat>> {
     let result = d1
         .prepare("SELECT * FROM chats WHERE id = ?")
         .bind(&[id.into()])?
-        .first::<Chat>()
+        .first::<Chat>(None)
         .await?;
     Ok(result)
 }
@@ -323,14 +381,15 @@ pub async fn get_chat_with_messages(d1: &D1Database, id: &str) -> Result<Respons
     let messages_result = d1
         .prepare("SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC")
         .bind(&[id.into()])?
-        .all::<Message>()
+        .all()
         .await;
 
     match messages_result {
         Ok(messages) => {
+            let results: Vec<Message> = messages.results()?;
             let chat_with_msgs = ChatWithMessages {
                 chat,
-                messages: messages.results(),
+                messages: results,
             };
             let resp = ApiResponse::success(chat_with_msgs);
             Response::from_json(&resp)
@@ -368,7 +427,8 @@ pub async fn delete_chat(d1: &D1Database, id: &str) -> Result<Response> {
 
     match result {
         Ok(meta) => {
-            if meta.changes() > 0 {
+            let changes = meta.meta()?.and_then(|m| m.changes).unwrap_or(0);
+            if changes > 0 {
                 let resp = ApiResponse::success(serde_json::json!({"deleted": true}));
                 Response::from_json(&resp)
             } else {
@@ -416,7 +476,7 @@ pub async fn send_message(d1: &D1Database, chat_id: &str, req: &SendMessageReque
             let msg = d1
                 .prepare("SELECT * FROM messages WHERE id = ?")
                 .bind(&[id.as_str().into()])?
-                .first::<Message>()
+                .first::<Message>(None)
                 .await?;
 
             match msg {
@@ -440,15 +500,16 @@ pub async fn get_messages(d1: &D1Database, chat_id: &str) -> Result<Response> {
     let result = d1
         .prepare("SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC")
         .bind(&[chat_id.into()])?
-        .all::<Message>()
+        .all()
         .await;
 
     match result {
         Ok(messages) => {
-            let results = messages.results();
+            let results: Vec<Message> = messages.results()?;
+            let total = results.len();
             let resp = PaginatedResponse {
                 success: true,
-                total: results.len(),
+                total,
                 data: results,
             };
             Response::from_json(&resp)

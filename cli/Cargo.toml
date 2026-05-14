@@ -1,0 +1,38 @@
+[package]
+name = "chat-cli"
+version = "0.1.0"
+description = "CLI client for the Chat App Backend — chat with agents and humans from the terminal"
+edition = "2021"
+
+[[bin]]
+name = "chat-cli"
+path = "src/main.rs"
+
+[dependencies]
+# CLI argument parsing
+clap = { version = "4", features = ["derive", "env"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# HTTP types (for test mock responses)
+http = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Terminal colors and formatting
+colored = "2"
+
+# Table display
+prettytable-rs = "0.10"
+
+[profile.release]
+lto = true
+opt-level = "s"
+strip = true
+codegen-units = 1

@@ -372,7 +372,8 @@ mod tests {
     #[test]
     fn test_validate_uuid_missing_dashes() {
         let err = validate_uuid("550e8400e29b41d4a716446655440000", "id").unwrap_err();
-        assert!(err.message().contains("UUID format"));
+        // 32 chars hits the length check first
+        assert!(err.message().contains("36 characters") && err.message().contains("32"));
     }
 
     // ─── Validator trait implementations ──────────────────────────────────────

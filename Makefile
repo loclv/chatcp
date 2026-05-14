@@ -27,13 +27,27 @@ fmt:
 fmt-check:
 	cargo fmt -- --check
 
-lint:
+# Backend lint (WASM target — excludes CLI)
+lint-backend:
 	cargo clippy --target wasm32-unknown-unknown -- -D warnings
+
+# CLI lint (native target)
+lint-cli:
+	cd cli && cargo clippy -- -D warnings
+
+# Lint both
+lint: lint-backend lint-cli
 
 # ─── Testing ──────────────────────────────────────────────────────────────────
 
 test:
+	cargo test --all
+
+test-backend:
 	cargo test
+
+test-cli:
+	cd cli && cargo test
 
 test-check:
 	cargo check --tests --target wasm32-unknown-unknown
