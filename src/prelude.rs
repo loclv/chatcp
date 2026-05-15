@@ -5,7 +5,7 @@
 
 pub use crate::models::{
     Agent, ApiResponse, AppError, Chat, ChatWithMessages, CreateAgentRequest, CreateChatRequest,
-    CreateOwnerRequest, Message, Owner, PaginatedResponse, SendMessageRequest,
+    CreateOwnerRequest, Message, Owner, PaginatedResponse, QueryParams, SendMessageRequest,
     SenderType, UpdateAgentRequest, UpdateChatRequest, UpdateOwnerRequest,
 };
 pub use serde_json;

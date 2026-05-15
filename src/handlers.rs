@@ -112,9 +112,10 @@ pub async fn create_agent(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     Ok(with_cors(resp))
 }
 
-pub async fn list_agents(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_agents(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
-    let resp = db::list_agents(&d1).await?;
+    let params = req.query::<QueryParams>().unwrap_or_default();
+    let resp = db::list_agents(&d1, &params).await?;
     Ok(with_cors(resp))
 }
 
@@ -143,6 +144,41 @@ pub async fn delete_agent(_req: Request, ctx: RouteContext<()>) -> Result<Respon
     Ok(with_cors(resp))
 }
 
+pub async fn get_agent_chats(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let id = ctx.param("id").map_or("", |v| v.as_str());
+    let mut params = req.query::<QueryParams>().unwrap_or_default();
+    params.agent_id = Some(id.to_string());
+    let resp = db::list_chats(&d1, &params).await?;
+    Ok(with_cors(resp))
+}
+
+pub async fn get_agent_owner(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let id = ctx.param("id").map_or("", |v| v.as_str());
+    
+    let agent = match db::get_agent_raw(&d1, id).await? {
+        Some(a) => a,
+        None => return Ok(with_cors(AppError::NotFound(format!("Agent '{}' not found", id)).into_response()?)),
+    };
+
+    let owner_id = match agent.owner_id {
+        Some(oid) => oid,
+        None => return Ok(with_cors(AppError::NotFound(format!("Agent '{}' has no owner", id)).into_response()?)),
+    };
+
+    let resp = db::get_owner(&d1, &owner_id).await?;
+    Ok(with_cors(resp))
+}
+
+pub async fn get_agent_messages(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let id = ctx.param("id").map_or("", |v| v.as_str());
+    let params = req.query::<QueryParams>().unwrap_or_default();
+    let resp = db::get_agent_messages(&d1, id, &params).await?;
+    Ok(with_cors(resp))
+}
+
 // ─── Owners ──────────────────────────────────────────────────────────────────
 
 pub async fn create_owner(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -155,9 +191,10 @@ pub async fn create_owner(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     Ok(with_cors(resp))
 }
 
-pub async fn list_owners(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_owners(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
-    let resp = db::list_owners(&d1).await?;
+    let params = req.query::<QueryParams>().unwrap_or_default();
+    let resp = db::list_owners(&d1, &params).await?;
     Ok(with_cors(resp))
 }
 
@@ -186,6 +223,24 @@ pub async fn delete_owner(_req: Request, ctx: RouteContext<()>) -> Result<Respon
     Ok(with_cors(resp))
 }
 
+pub async fn get_owner_agents(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let id = ctx.param("id").map_or("", |v| v.as_str());
+    let mut params = req.query::<QueryParams>().unwrap_or_default();
+    params.owner_id = Some(id.to_string());
+    let resp = db::list_agents(&d1, &params).await?;
+    Ok(with_cors(resp))
+}
+
+pub async fn get_owner_chats(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let id = ctx.param("id").map_or("", |v| v.as_str());
+    let mut params = req.query::<QueryParams>().unwrap_or_default();
+    params.owner_id = Some(id.to_string());
+    let resp = db::list_chats(&d1, &params).await?;
+    Ok(with_cors(resp))
+}
+
 // ─── Chats ───────────────────────────────────────────────────────────────────
 
 pub async fn create_chat(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -198,9 +253,10 @@ pub async fn create_chat(mut req: Request, ctx: RouteContext<()>) -> Result<Resp
     Ok(with_cors(resp))
 }
 
-pub async fn list_chats(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list_chats(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
-    let resp = db::list_chats(&d1).await?;
+    let params = req.query::<QueryParams>().unwrap_or_default();
+    let resp = db::list_chats(&d1, &params).await?;
     Ok(with_cors(resp))
 }
 
@@ -242,9 +298,10 @@ pub async fn send_message(mut req: Request, ctx: RouteContext<()>) -> Result<Res
     Ok(with_cors(resp))
 }
 
-pub async fn get_messages(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn get_messages(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
     let chat_id = ctx.param("id").map_or("", |v| v.as_str());
-    let resp = db::get_messages(&d1, chat_id).await?;
+    let params = req.query::<QueryParams>().unwrap_or_default();
+    let resp = db::get_messages(&d1, chat_id, &params).await?;
     Ok(with_cors(resp))
 }

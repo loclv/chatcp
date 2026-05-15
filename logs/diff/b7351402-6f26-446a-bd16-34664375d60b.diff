@@ -1,0 +1,560 @@
+diff --git a/src/db.rs b/src/db.rs
+index dc6f694..ae94d2c 100644
+--- a/src/db.rs
++++ b/src/db.rs
+@@ -105,20 +105,67 @@ pub async fn create_agent(d1: &D1Database, req: &CreateAgentRequest) -> Result<R
+     }
+ }
+ 
+-pub async fn list_agents(d1: &D1Database) -> Result<Response> {
+-    let result = d1
+-        .prepare("SELECT * FROM agents ORDER BY created_at DESC")
+-        .all()
+-        .await;
++pub async fn list_agents(d1: &D1Database, params: &QueryParams) -> Result<Response> {
++    let mut query = "SELECT * FROM agents".to_string();
++    let mut count_query = "SELECT COUNT(*) as total FROM agents".to_string();
++    let mut args: Vec<JsValue> = Vec::new();
++
++    if let Some(owner_id) = &params.owner_id {
++        query.push_str(" WHERE owner_id = ?");
++        count_query.push_str(" WHERE owner_id = ?");
++        args.push(owner_id.as_str().into());
++    }
+ 
+-    match result {
++    if let Some(after) = &params.created_after {
++        let prefix = if query.contains("WHERE") { " AND " } else { " WHERE " };
++        query.push_str(prefix);
++        query.push_str("created_at >= ?");
++        count_query.push_str(prefix);
++        count_query.push_str("created_at >= ?");
++        args.push(after.as_str().into());
++    }
++
++    if let Some(before) = &params.created_before {
++        let prefix = if query.contains("WHERE") { " AND " } else { " WHERE " };
++        query.push_str(prefix);
++        query.push_str("created_at <= ?");
++        count_query.push_str(prefix);
++        count_query.push_str("created_at <= ?");
++        args.push(before.as_str().into());
++    }
++
++    let sort_by = params.sort_by.as_deref().unwrap_or("created_at");
++    let sort_order = params.sort_order.as_deref().unwrap_or("DESC");
++    // Whitelist sort fields
++    let safe_sort_by = match sort_by {
++        "name" => "name",
++        "updated_at" => "updated_at",
++        _ => "created_at",
++    };
++    let safe_sort_order = if sort_order.to_uppercase() == "ASC" { "ASC" } else { "DESC" };
++
++    query.push_str(&format!(" ORDER BY {} {}", safe_sort_by, safe_sort_order));
++    query.push_str(" LIMIT ? OFFSET ?");
++
++    let limit = params.limit();
++    let offset = params.offset();
++
++    let mut bind_args = args.clone();
++    bind_args.push(limit.into());
++    bind_args.push(offset.into());
++
++    let results = d1.prepare(&query).bind(&bind_args)?.all().await;
++    let total_count = get_total_count(d1, &count_query, &args).await?;
++
++    match results {
+         Ok(agents) => {
+-            let results: Vec<Agent> = agents.results()?;
+-            let total = results.len();
++            let data: Vec<Agent> = agents.results()?;
+             let resp = PaginatedResponse {
+                 success: true,
+-                total,
+-                data: results,
++                data,
++                total: total_count,
++                limit,
++                offset,
+             };
+             Response::from_json(&resp)
+         }
+@@ -126,6 +173,17 @@ pub async fn list_agents(d1: &D1Database) -> Result<Response> {
+     }
+ }
+ 
++async fn get_total_count(d1: &D1Database, query: &str, args: &[JsValue]) -> Result<usize> {
++    let result = d1.prepare(query).bind(args)?.first::<serde_json::Value>(None).await?;
++    match result {
++        Some(row) => {
++            let count = row.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
++            Ok(count as usize)
++        }
++        None => Ok(0),
++    }
++}
++
+ pub async fn get_agent(d1: &D1Database, id: &str) -> Result<Response> {
+     match get_agent_by_id(d1, id).await {
+         Ok(Some(agent)) => {
+@@ -146,6 +204,45 @@ async fn get_agent_by_id(d1: &D1Database, id: &str) -> Result<Option<Agent>> {
+     Ok(result)
+ }
+ 
++/// Raw version of get_agent_by_id exposed to other modules.
++pub async fn get_agent_raw(d1: &D1Database, id: &str) -> Result<Option<Agent>> {
++    get_agent_by_id(d1, id).await
++}
++
++pub async fn get_agent_messages(d1: &D1Database, id: &str, params: &QueryParams) -> Result<Response> {
++    let query = "SELECT * FROM messages WHERE sender_id = ? AND sender_type = 'agent' ORDER BY created_at DESC LIMIT ? OFFSET ?";
++    let limit = params.limit();
++    let offset = params.offset();
++
++    let results = d1
++        .prepare(query)
++        .bind(&[id.into(), limit.into(), offset.into()])?
++        .all()
++        .await;
++
++    let total_count = get_total_count(
++        d1,
++        "SELECT COUNT(*) as total FROM messages WHERE sender_id = ? AND sender_type = 'agent'",
++        &[id.into()],
++    )
++    .await?;
++
++    match results {
++        Ok(messages) => {
++            let data: Vec<Message> = messages.results()?;
++            let resp = PaginatedResponse {
++                success: true,
++                data,
++                total: total_count,
++                limit,
++                offset,
++            };
++            Response::from_json(&resp)
++        }
++        Err(e) => AppError::Database(format!("Failed to get agent messages: {}", e)).into_response(),
++    }
++}
++
+ pub async fn update_agent(d1: &D1Database, id: &str, req: &UpdateAgentRequest) -> Result<Response> {
+     let existing = match get_agent_by_id(d1, id).await? {
+         Some(a) => a,
+@@ -154,6 +251,7 @@ pub async fn update_agent(d1: &D1Database, id: &str, req: &UpdateAgentRequest) -
+ 
+     let name = req.name.as_deref().unwrap_or(&existing.name);
+     let description = req.description.as_deref().unwrap_or(&existing.description);
++    let owner_id = req.owner_id.clone().or(existing.owner_id);
+ 
+     let result = d1
+         .prepare(
+@@ -162,7 +260,7 @@ pub async fn update_agent(d1: &D1Database, id: &str, req: &UpdateAgentRequest) -
+         .bind(&[
+             name.into(),
+             description.into(),
+-            optional_js_value(&req.owner_id),
++            optional_js_value(&owner_id),
+             id.into(),
+         ])?
+         .run()
+@@ -227,20 +325,23 @@ pub async fn create_owner(d1: &D1Database, req: &CreateOwnerRequest) -> Result<R
+     }
+ }
+ 
+-pub async fn list_owners(d1: &D1Database) -> Result<Response> {
+-    let result = d1
+-        .prepare("SELECT * FROM owners ORDER BY created_at DESC")
+-        .all()
+-        .await;
++pub async fn list_owners(d1: &D1Database, params: &QueryParams) -> Result<Response> {
++    let query = "SELECT * FROM owners ORDER BY created_at DESC LIMIT ? OFFSET ?";
++    let limit = params.limit();
++    let offset = params.offset();
+ 
+-    match result {
++    let results = d1.prepare(query).bind(&[limit.into(), offset.into()])?.all().await;
++    let total_count = get_total_count(d1, "SELECT COUNT(*) as total FROM owners", &[]).await?;
++
++    match results {
+         Ok(owners) => {
+-            let results: Vec<Owner> = owners.results()?;
+-            let total = results.len();
++            let data: Vec<Owner> = owners.results()?;
+             let resp = PaginatedResponse {
+                 success: true,
+-                total,
+-                data: results,
++                data,
++                total: total_count,
++                limit,
++                offset,
+             };
+             Response::from_json(&resp)
+         }
+@@ -342,20 +443,48 @@ pub async fn create_chat(d1: &D1Database, req: &CreateChatRequest) -> Result<Res
+     }
+ }
+ 
+-pub async fn list_chats(d1: &D1Database) -> Result<Response> {
+-    let result = d1
+-        .prepare("SELECT * FROM chats ORDER BY updated_at DESC")
+-        .all()
+-        .await;
++pub async fn list_chats(d1: &D1Database, params: &QueryParams) -> Result<Response> {
++    let mut query = "SELECT * FROM chats".to_string();
++    let mut count_query = "SELECT COUNT(*) as total FROM chats".to_string();
++    let mut args: Vec<JsValue> = Vec::new();
+ 
+-    match result {
++    let mut where_clauses = Vec::new();
++    if let Some(agent_id) = &params.agent_id {
++        where_clauses.push("agent_id = ?");
++        args.push(agent_id.as_str().into());
++    }
++    if let Some(owner_id) = &params.owner_id {
++        where_clauses.push("owner_id = ?");
++        args.push(owner_id.as_str().into());
++    }
++
++    if !where_clauses.is_empty() {
++        let clause = format!(" WHERE {}", where_clauses.join(" AND "));
++        query.push_str(&clause);
++        count_query.push_str(&clause);
++    }
++
++    query.push_str(" ORDER BY updated_at DESC LIMIT ? OFFSET ?");
++
++    let limit = params.limit();
++    let offset = params.offset();
++
++    let mut bind_args = args.clone();
++    bind_args.push(limit.into());
++    bind_args.push(offset.into());
++
++    let results = d1.prepare(&query).bind(&bind_args)?.all().await;
++    let total_count = get_total_count(d1, &count_query, &args).await?;
++
++    match results {
+         Ok(chats) => {
+-            let results: Vec<Chat> = chats.results()?;
+-            let total = results.len();
++            let data: Vec<Chat> = chats.results()?;
+             let resp = PaginatedResponse {
+                 success: true,
+-                total,
+-                data: results,
++                data,
++                total: total_count,
++                limit,
++                offset,
+             };
+             Response::from_json(&resp)
+         }
+@@ -491,26 +620,44 @@ pub async fn send_message(d1: &D1Database, chat_id: &str, req: &SendMessageReque
+     }
+ }
+ 
+-pub async fn get_messages(d1: &D1Database, chat_id: &str) -> Result<Response> {
++pub async fn get_messages(d1: &D1Database, chat_id: &str, params: &QueryParams) -> Result<Response> {
+     // Verify chat exists
+     if get_chat_by_id(d1, chat_id).await?.is_none() {
+         return AppError::NotFound(format!("Chat '{}' not found", chat_id)).into_response();
+     }
+ 
+-    let result = d1
+-        .prepare("SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC")
+-        .bind(&[chat_id.into()])?
+-        .all()
+-        .await;
++    let mut query = "SELECT * FROM messages WHERE chat_id = ?".to_string();
++    let mut count_query = "SELECT COUNT(*) as total FROM messages WHERE chat_id = ?".to_string();
++    let mut args: Vec<JsValue> = vec![chat_id.into()];
+ 
+-    match result {
++    if let Some(q) = &params.q {
++        let filter = format!("%{}%", q);
++        query.push_str(" AND content LIKE ?");
++        count_query.push_str(" AND content LIKE ?");
++        args.push(filter.into());
++    }
++
++    query.push_str(" ORDER BY created_at ASC LIMIT ? OFFSET ?");
++    
++    let limit = params.limit();
++    let offset = params.offset();
++
++    let mut bind_args = args.clone();
++    bind_args.push(limit.into());
++    bind_args.push(offset.into());
++
++    let results = d1.prepare(&query).bind(&bind_args)?.all().await;
++    let total_count = get_total_count(d1, &count_query, &args).await?;
++
++    match results {
+         Ok(messages) => {
+-            let results: Vec<Message> = messages.results()?;
+-            let total = results.len();
++            let data: Vec<Message> = messages.results()?;
+             let resp = PaginatedResponse {
+                 success: true,
+-                total,
+-                data: results,
++                data,
++                total: total_count,
++                limit,
++                offset,
+             };
+             Response::from_json(&resp)
+         }
+diff --git a/src/handlers.rs b/src/handlers.rs
+index a089a7e..fcad4b5 100644
+--- a/src/handlers.rs
++++ b/src/handlers.rs
+@@ -112,9 +112,10 @@ pub async fn create_agent(mut req: Request, ctx: RouteContext<()>) -> Result<Res
+     Ok(with_cors(resp))
+ }
+ 
+-pub async fn list_agents(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
++pub async fn list_agents(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+     let d1 = ctx.d1("DB")?;
+-    let resp = db::list_agents(&d1).await?;
++    let params = req.query::<QueryParams>().unwrap_or_default();
++    let resp = db::list_agents(&d1, &params).await?;
+     Ok(with_cors(resp))
+ }
+ 
+@@ -143,6 +144,41 @@ pub async fn delete_agent(_req: Request, ctx: RouteContext<()>) -> Result<Respon
+     Ok(with_cors(resp))
+ }
+ 
++pub async fn get_agent_chats(req: Request, ctx: RouteContext<()>) -> Result<Response> {
++    let d1 = ctx.d1("DB")?;
++    let id = ctx.param("id").map_or("", |v| v.as_str());
++    let mut params = req.query::<QueryParams>().unwrap_or_default();
++    params.agent_id = Some(id.to_string());
++    let resp = db::list_chats(&d1, &params).await?;
++    Ok(with_cors(resp))
++}
++
++pub async fn get_agent_owner(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
++    let d1 = ctx.d1("DB")?;
++    let id = ctx.param("id").map_or("", |v| v.as_str());
++    
++    let agent = match db::get_agent_raw(&d1, id).await? {
++        Some(a) => a,
++        None => return Ok(with_cors(AppError::NotFound(format!("Agent '{}' not found", id)).into_response()?)),
++    };
++
++    let owner_id = match agent.owner_id {
++        Some(oid) => oid,
++        None => return Ok(with_cors(AppError::NotFound(format!("Agent '{}' has no owner", id)).into_response()?)),
++    };
++
++    let resp = db::get_owner(&d1, &owner_id).await?;
++    Ok(with_cors(resp))
++}
++
++pub async fn get_agent_messages(req: Request, ctx: RouteContext<()>) -> Result<Response> {
++    let d1 = ctx.d1("DB")?;
++    let id = ctx.param("id").map_or("", |v| v.as_str());
++    let params = req.query::<QueryParams>().unwrap_or_default();
++    let resp = db::get_agent_messages(&d1, id, &params).await?;
++    Ok(with_cors(resp))
++}
++
+ // ─── Owners ──────────────────────────────────────────────────────────────────
+ 
+ pub async fn create_owner(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+@@ -155,9 +191,10 @@ pub async fn create_owner(mut req: Request, ctx: RouteContext<()>) -> Result<Res
+     Ok(with_cors(resp))
+ }
+ 
+-pub async fn list_owners(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
++pub async fn list_owners(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+     let d1 = ctx.d1("DB")?;
+-    let resp = db::list_owners(&d1).await?;
++    let params = req.query::<QueryParams>().unwrap_or_default();
++    let resp = db::list_owners(&d1, &params).await?;
+     Ok(with_cors(resp))
+ }
+ 
+@@ -186,6 +223,24 @@ pub async fn delete_owner(_req: Request, ctx: RouteContext<()>) -> Result<Respon
+     Ok(with_cors(resp))
+ }
+ 
++pub async fn get_owner_agents(req: Request, ctx: RouteContext<()>) -> Result<Response> {
++    let d1 = ctx.d1("DB")?;
++    let id = ctx.param("id").map_or("", |v| v.as_str());
++    let mut params = req.query::<QueryParams>().unwrap_or_default();
++    params.owner_id = Some(id.to_string());
++    let resp = db::list_agents(&d1, &params).await?;
++    Ok(with_cors(resp))
++}
++
++pub async fn get_owner_chats(req: Request, ctx: RouteContext<()>) -> Result<Response> {
++    let d1 = ctx.d1("DB")?;
++    let id = ctx.param("id").map_or("", |v| v.as_str());
++    let mut params = req.query::<QueryParams>().unwrap_or_default();
++    params.owner_id = Some(id.to_string());
++    let resp = db::list_chats(&d1, &params).await?;
++    Ok(with_cors(resp))
++}
++
+ // ─── Chats ───────────────────────────────────────────────────────────────────
+ 
+ pub async fn create_chat(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+@@ -198,9 +253,10 @@ pub async fn create_chat(mut req: Request, ctx: RouteContext<()>) -> Result<Resp
+     Ok(with_cors(resp))
+ }
+ 
+-pub async fn list_chats(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
++pub async fn list_chats(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+     let d1 = ctx.d1("DB")?;
+-    let resp = db::list_chats(&d1).await?;
++    let params = req.query::<QueryParams>().unwrap_or_default();
++    let resp = db::list_chats(&d1, &params).await?;
+     Ok(with_cors(resp))
+ }
+ 
+@@ -242,9 +298,10 @@ pub async fn send_message(mut req: Request, ctx: RouteContext<()>) -> Result<Res
+     Ok(with_cors(resp))
+ }
+ 
+-pub async fn get_messages(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
++pub async fn get_messages(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+     let d1 = ctx.d1("DB")?;
+     let chat_id = ctx.param("id").map_or("", |v| v.as_str());
+-    let resp = db::get_messages(&d1, chat_id).await?;
++    let params = req.query::<QueryParams>().unwrap_or_default();
++    let resp = db::get_messages(&d1, chat_id, &params).await?;
+     Ok(with_cors(resp))
+ }
+diff --git a/src/lib.rs b/src/lib.rs
+index 677cb52..6b33647 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -11,11 +11,27 @@ mod models;
+ mod prelude;
+ mod router;
+ mod validation;
++#[cfg(test)]
++mod integration_tests;
+ 
+ /// The main entry point for the Cloudflare Worker.
+ /// Creates the router and dispatches the incoming request.
+ #[event(fetch)]
+ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
++    let start_time = Date::now().as_millis();
++    
++    // Extract the CF-Ray ID before moving the request into the router
++    let request_id = req.headers().get("cf-ray").unwrap_or_else(|_| Some(uuid::Uuid::new_v4().to_string())).unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
++
+     let router = router::build_router();
+-    router.run(req, env).await
++    let mut resp = router.run(req, env).await?;
++    
++    let end_time = Date::now().as_millis();
++    let duration = end_time - start_time;
++    
++    let headers = resp.headers_mut();
++    headers.set("X-Request-Id", &request_id).ok();
++    headers.set("X-Response-Time", &format!("{}ms", duration)).ok();
++    
++    Ok(resp)
+ }
+diff --git a/src/models.rs b/src/models.rs
+index 7ff99bf..1c6e329 100644
+--- a/src/models.rs
++++ b/src/models.rs
+@@ -229,6 +229,31 @@ pub struct SendMessageRequest {
+     pub content: String,
+ }
+ 
++// ─── Query Parameters ────────────────────────────────────────────────────────
++
++#[derive(Debug, Deserialize, Serialize, Default)]
++pub struct QueryParams {
++    pub limit: Option<u32>,
++    pub offset: Option<u32>,
++    pub owner_id: Option<String>,
++    pub agent_id: Option<String>,
++    pub sort_by: Option<String>,
++    pub sort_order: Option<String>,
++    pub q: Option<String>,
++    pub created_after: Option<String>,
++    pub created_before: Option<String>,
++}
++
++impl QueryParams {
++    pub fn limit(&self) -> u32 {
++        self.limit.unwrap_or(50).min(1000)
++    }
++
++    pub fn offset(&self) -> u32 {
++        self.offset.unwrap_or(0)
++    }
++}
++
+ // ─── API Response Types ──────────────────────────────────────────────────────
+ 
+ /// Standard success response wrapper.
+@@ -255,6 +280,8 @@ pub struct PaginatedResponse<T: Serialize> {
+     pub success: bool,
+     pub data: Vec<T>,
+     pub total: usize,
++    pub limit: u32,
++    pub offset: u32,
+ }
+ 
+ /// Structured error response with a machine-readable error code.
+@@ -414,6 +441,8 @@ mod tests {
+             success: true,
+             total: 3,
+             data: items,
++            limit: 50,
++            offset: 0,
+         };
+         let json = serde_json::to_string(&resp).unwrap();
+         assert!(json.contains(r#""success":true"#));
+diff --git a/src/prelude.rs b/src/prelude.rs
+index 7bcbf9b..c081c07 100644
+--- a/src/prelude.rs
++++ b/src/prelude.rs
+@@ -5,7 +5,7 @@
+ 
+ pub use crate::models::{
+     Agent, ApiResponse, AppError, Chat, ChatWithMessages, CreateAgentRequest, CreateChatRequest,
+-    CreateOwnerRequest, Message, Owner, PaginatedResponse, SendMessageRequest,
++    CreateOwnerRequest, Message, Owner, PaginatedResponse, QueryParams, SendMessageRequest,
+     SenderType, UpdateAgentRequest, UpdateChatRequest, UpdateOwnerRequest,
+ };
+ pub use serde_json;
+diff --git a/src/router.rs b/src/router.rs
+index ffc050d..37aa867 100644
+--- a/src/router.rs
++++ b/src/router.rs
+@@ -31,7 +31,11 @@ pub fn build_router() -> Router<'static, ()> {
+         .get_async("/api/agents", handlers::list_agents)
+         .get_async("/api/agents/:id", handlers::get_agent)
+         .put_async("/api/agents/:id", handlers::update_agent)
++        .patch_async("/api/agents/:id", handlers::update_agent)
+         .delete_async("/api/agents/:id", handlers::delete_agent)
++        .get_async("/api/agents/:id/chats", handlers::get_agent_chats)
++        .get_async("/api/agents/:id/owner", handlers::get_agent_owner)
++        .get_async("/api/agents/:id/messages", handlers::get_agent_messages)
+ 
+         // ─── Owners CRUD ────────────────────────────────────────────────────
+         .post_async("/api/owners", handlers::create_owner)
+@@ -39,6 +43,8 @@ pub fn build_router() -> Router<'static, ()> {
+         .get_async("/api/owners/:id", handlers::get_owner)
+         .put_async("/api/owners/:id", handlers::update_owner)
+         .delete_async("/api/owners/:id", handlers::delete_owner)
++        .get_async("/api/owners/:id/agents", handlers::get_owner_agents)
++        .get_async("/api/owners/:id/chats", handlers::get_owner_chats)
+ 
+         // ─── Chats CRUD ─────────────────────────────────────────────────────
+         .post_async("/api/chats", handlers::create_chat)

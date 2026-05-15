@@ -105,24 +105,82 @@ pub async fn create_agent(d1: &D1Database, req: &CreateAgentRequest) -> Result<R
     }
 }
 
-pub async fn list_agents(d1: &D1Database) -> Result<Response> {
-    let result = d1
-        .prepare("SELECT * FROM agents ORDER BY created_at DESC")
-        .all()
-        .await;
+pub async fn list_agents(d1: &D1Database, params: &QueryParams) -> Result<Response> {
+    let mut query = "SELECT * FROM agents".to_string();
+    let mut count_query = "SELECT COUNT(*) as total FROM agents".to_string();
+    let mut args: Vec<JsValue> = Vec::new();
 
-    match result {
+    if let Some(owner_id) = &params.owner_id {
+        query.push_str(" WHERE owner_id = ?");
+        count_query.push_str(" WHERE owner_id = ?");
+        args.push(owner_id.as_str().into());
+    }
+
+    if let Some(after) = &params.created_after {
+        let prefix = if query.contains("WHERE") { " AND " } else { " WHERE " };
+        query.push_str(prefix);
+        query.push_str("created_at >= ?");
+        count_query.push_str(prefix);
+        count_query.push_str("created_at >= ?");
+        args.push(after.as_str().into());
+    }
+
+    if let Some(before) = &params.created_before {
+        let prefix = if query.contains("WHERE") { " AND " } else { " WHERE " };
+        query.push_str(prefix);
+        query.push_str("created_at <= ?");
+        count_query.push_str(prefix);
+        count_query.push_str("created_at <= ?");
+        args.push(before.as_str().into());
+    }
+
+    let sort_by = params.sort_by.as_deref().unwrap_or("created_at");
+    let sort_order = params.sort_order.as_deref().unwrap_or("DESC");
+    // Whitelist sort fields
+    let safe_sort_by = match sort_by {
+        "name" => "name",
+        "updated_at" => "updated_at",
+        _ => "created_at",
+    };
+    let safe_sort_order = if sort_order.to_uppercase() == "ASC" { "ASC" } else { "DESC" };
+
+    query.push_str(&format!(" ORDER BY {} {}", safe_sort_by, safe_sort_order));
+    query.push_str(" LIMIT ? OFFSET ?");
+
+    let limit = params.limit();
+    let offset = params.offset();
+
+    let mut bind_args = args.clone();
+    bind_args.push(limit.into());
+    bind_args.push(offset.into());
+
+    let results = d1.prepare(&query).bind(&bind_args)?.all().await;
+    let total_count = get_total_count(d1, &count_query, &args).await?;
+
+    match results {
         Ok(agents) => {
-            let results: Vec<Agent> = agents.results()?;
-            let total = results.len();
+            let data: Vec<Agent> = agents.results()?;
             let resp = PaginatedResponse {
                 success: true,
-                total,
-                data: results,
+                data,
+                total: total_count,
+                limit,
+                offset,
             };
             Response::from_json(&resp)
         }
         Err(e) => AppError::Database(format!("Failed to list agents: {}", e)).into_response(),
+    }
+}
+
+async fn get_total_count(d1: &D1Database, query: &str, args: &[JsValue]) -> Result<usize> {
+    let result = d1.prepare(query).bind(args)?.first::<serde_json::Value>(None).await?;
+    match result {
+        Some(row) => {
+            let count = row.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
+            Ok(count as usize)
+        }
+        None => Ok(0),
     }
 }
 
@@ -146,6 +204,45 @@ async fn get_agent_by_id(d1: &D1Database, id: &str) -> Result<Option<Agent>> {
     Ok(result)
 }
 
+/// Raw version of get_agent_by_id exposed to other modules.
+pub async fn get_agent_raw(d1: &D1Database, id: &str) -> Result<Option<Agent>> {
+    get_agent_by_id(d1, id).await
+}
+
+pub async fn get_agent_messages(d1: &D1Database, id: &str, params: &QueryParams) -> Result<Response> {
+    let query = "SELECT * FROM messages WHERE sender_id = ? AND sender_type = 'agent' ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    let limit = params.limit();
+    let offset = params.offset();
+
+    let results = d1
+        .prepare(query)
+        .bind(&[id.into(), limit.into(), offset.into()])?
+        .all()
+        .await;
+
+    let total_count = get_total_count(
+        d1,
+        "SELECT COUNT(*) as total FROM messages WHERE sender_id = ? AND sender_type = 'agent'",
+        &[id.into()],
+    )
+    .await?;
+
+    match results {
+        Ok(messages) => {
+            let data: Vec<Message> = messages.results()?;
+            let resp = PaginatedResponse {
+                success: true,
+                data,
+                total: total_count,
+                limit,
+                offset,
+            };
+            Response::from_json(&resp)
+        }
+        Err(e) => AppError::Database(format!("Failed to get agent messages: {}", e)).into_response(),
+    }
+}
+
 pub async fn update_agent(d1: &D1Database, id: &str, req: &UpdateAgentRequest) -> Result<Response> {
     let existing = match get_agent_by_id(d1, id).await? {
         Some(a) => a,
@@ -154,6 +251,7 @@ pub async fn update_agent(d1: &D1Database, id: &str, req: &UpdateAgentRequest) -
 
     let name = req.name.as_deref().unwrap_or(&existing.name);
     let description = req.description.as_deref().unwrap_or(&existing.description);
+    let owner_id = req.owner_id.clone().or(existing.owner_id);
 
     let result = d1
         .prepare(
@@ -162,7 +260,7 @@ pub async fn update_agent(d1: &D1Database, id: &str, req: &UpdateAgentRequest) -
         .bind(&[
             name.into(),
             description.into(),
-            optional_js_value(&req.owner_id),
+            optional_js_value(&owner_id),
             id.into(),
         ])?
         .run()
@@ -227,20 +325,23 @@ pub async fn create_owner(d1: &D1Database, req: &CreateOwnerRequest) -> Result<R
     }
 }
 
-pub async fn list_owners(d1: &D1Database) -> Result<Response> {
-    let result = d1
-        .prepare("SELECT * FROM owners ORDER BY created_at DESC")
-        .all()
-        .await;
+pub async fn list_owners(d1: &D1Database, params: &QueryParams) -> Result<Response> {
+    let query = "SELECT * FROM owners ORDER BY created_at DESC LIMIT ? OFFSET ?";
+    let limit = params.limit();
+    let offset = params.offset();
 
-    match result {
+    let results = d1.prepare(query).bind(&[limit.into(), offset.into()])?.all().await;
+    let total_count = get_total_count(d1, "SELECT COUNT(*) as total FROM owners", &[]).await?;
+
+    match results {
         Ok(owners) => {
-            let results: Vec<Owner> = owners.results()?;
-            let total = results.len();
+            let data: Vec<Owner> = owners.results()?;
             let resp = PaginatedResponse {
                 success: true,
-                total,
-                data: results,
+                data,
+                total: total_count,
+                limit,
+                offset,
             };
             Response::from_json(&resp)
         }
@@ -342,20 +443,48 @@ pub async fn create_chat(d1: &D1Database, req: &CreateChatRequest) -> Result<Res
     }
 }
 
-pub async fn list_chats(d1: &D1Database) -> Result<Response> {
-    let result = d1
-        .prepare("SELECT * FROM chats ORDER BY updated_at DESC")
-        .all()
-        .await;
+pub async fn list_chats(d1: &D1Database, params: &QueryParams) -> Result<Response> {
+    let mut query = "SELECT * FROM chats".to_string();
+    let mut count_query = "SELECT COUNT(*) as total FROM chats".to_string();
+    let mut args: Vec<JsValue> = Vec::new();
 
-    match result {
+    let mut where_clauses = Vec::new();
+    if let Some(agent_id) = &params.agent_id {
+        where_clauses.push("agent_id = ?");
+        args.push(agent_id.as_str().into());
+    }
+    if let Some(owner_id) = &params.owner_id {
+        where_clauses.push("owner_id = ?");
+        args.push(owner_id.as_str().into());
+    }
+
+    if !where_clauses.is_empty() {
+        let clause = format!(" WHERE {}", where_clauses.join(" AND "));
+        query.push_str(&clause);
+        count_query.push_str(&clause);
+    }
+
+    query.push_str(" ORDER BY updated_at DESC LIMIT ? OFFSET ?");
+
+    let limit = params.limit();
+    let offset = params.offset();
+
+    let mut bind_args = args.clone();
+    bind_args.push(limit.into());
+    bind_args.push(offset.into());
+
+    let results = d1.prepare(&query).bind(&bind_args)?.all().await;
+    let total_count = get_total_count(d1, &count_query, &args).await?;
+
+    match results {
         Ok(chats) => {
-            let results: Vec<Chat> = chats.results()?;
-            let total = results.len();
+            let data: Vec<Chat> = chats.results()?;
             let resp = PaginatedResponse {
                 success: true,
-                total,
-                data: results,
+                data,
+                total: total_count,
+                limit,
+                offset,
             };
             Response::from_json(&resp)
         }
@@ -491,26 +620,44 @@ pub async fn send_message(d1: &D1Database, chat_id: &str, req: &SendMessageReque
     }
 }
 
-pub async fn get_messages(d1: &D1Database, chat_id: &str) -> Result<Response> {
+pub async fn get_messages(d1: &D1Database, chat_id: &str, params: &QueryParams) -> Result<Response> {
     // Verify chat exists
     if get_chat_by_id(d1, chat_id).await?.is_none() {
         return AppError::NotFound(format!("Chat '{}' not found", chat_id)).into_response();
     }
 
-    let result = d1
-        .prepare("SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC")
-        .bind(&[chat_id.into()])?
-        .all()
-        .await;
+    let mut query = "SELECT * FROM messages WHERE chat_id = ?".to_string();
+    let mut count_query = "SELECT COUNT(*) as total FROM messages WHERE chat_id = ?".to_string();
+    let mut args: Vec<JsValue> = vec![chat_id.into()];
 
-    match result {
+    if let Some(q) = &params.q {
+        let filter = format!("%{}%", q);
+        query.push_str(" AND content LIKE ?");
+        count_query.push_str(" AND content LIKE ?");
+        args.push(filter.into());
+    }
+
+    query.push_str(" ORDER BY created_at ASC LIMIT ? OFFSET ?");
+    
+    let limit = params.limit();
+    let offset = params.offset();
+
+    let mut bind_args = args.clone();
+    bind_args.push(limit.into());
+    bind_args.push(offset.into());
+
+    let results = d1.prepare(&query).bind(&bind_args)?.all().await;
+    let total_count = get_total_count(d1, &count_query, &args).await?;
+
+    match results {
         Ok(messages) => {
-            let results: Vec<Message> = messages.results()?;
-            let total = results.len();
+            let data: Vec<Message> = messages.results()?;
             let resp = PaginatedResponse {
                 success: true,
-                total,
-                data: results,
+                data,
+                total: total_count,
+                limit,
+                offset,
             };
             Response::from_json(&resp)
         }

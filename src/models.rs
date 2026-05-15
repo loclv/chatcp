@@ -229,6 +229,31 @@ pub struct SendMessageRequest {
     pub content: String,
 }
 
+// ─── Query Parameters ────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub struct QueryParams {
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+    pub owner_id: Option<String>,
+    pub agent_id: Option<String>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
+    pub q: Option<String>,
+    pub created_after: Option<String>,
+    pub created_before: Option<String>,
+}
+
+impl QueryParams {
+    pub fn limit(&self) -> u32 {
+        self.limit.unwrap_or(50).min(1000)
+    }
+
+    pub fn offset(&self) -> u32 {
+        self.offset.unwrap_or(0)
+    }
+}
+
 // ─── API Response Types ──────────────────────────────────────────────────────
 
 /// Standard success response wrapper.
@@ -255,6 +280,8 @@ pub struct PaginatedResponse<T: Serialize> {
     pub success: bool,
     pub data: Vec<T>,
     pub total: usize,
+    pub limit: u32,
+    pub offset: u32,
 }
 
 /// Structured error response with a machine-readable error code.
@@ -414,6 +441,8 @@ mod tests {
             success: true,
             total: 3,
             data: items,
+            limit: 50,
+            offset: 0,
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains(r#""success":true"#));

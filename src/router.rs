@@ -31,7 +31,11 @@ pub fn build_router() -> Router<'static, ()> {
         .get_async("/api/agents", handlers::list_agents)
         .get_async("/api/agents/:id", handlers::get_agent)
         .put_async("/api/agents/:id", handlers::update_agent)
+        .patch_async("/api/agents/:id", handlers::update_agent)
         .delete_async("/api/agents/:id", handlers::delete_agent)
+        .get_async("/api/agents/:id/chats", handlers::get_agent_chats)
+        .get_async("/api/agents/:id/owner", handlers::get_agent_owner)
+        .get_async("/api/agents/:id/messages", handlers::get_agent_messages)
 
         // ─── Owners CRUD ────────────────────────────────────────────────────
         .post_async("/api/owners", handlers::create_owner)
@@ -39,6 +43,8 @@ pub fn build_router() -> Router<'static, ()> {
         .get_async("/api/owners/:id", handlers::get_owner)
         .put_async("/api/owners/:id", handlers::update_owner)
         .delete_async("/api/owners/:id", handlers::delete_owner)
+        .get_async("/api/owners/:id/agents", handlers::get_owner_agents)
+        .get_async("/api/owners/:id/chats", handlers::get_owner_chats)
 
         // ─── Chats CRUD ─────────────────────────────────────────────────────
         .post_async("/api/chats", handlers::create_chat)
