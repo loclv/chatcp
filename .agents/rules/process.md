@@ -4,10 +4,10 @@ trigger: always_on
 
 # Agent Process Rules
 
-Rules for how the AI assistant (Antigravity) should operate within this project.
+Rules for how the AI assistant should operate within this project.
 
 ## Implementation Notes
-- **Running implementation-notes.md**: While implementing tasks, maintain a running `implementation-notes.md` file in the project root.
+- **implementation-notes.md**: While implementing tasks, maintain a "implementation-notes.md" file in the project root.
 - **Content**:
     - Decisions made that were not in the original spec.
     - Changes made to the existing codebase or planned approach during execution.
