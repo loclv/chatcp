@@ -2,24 +2,13 @@
 target/
 Cargo.lock
 
-# Wrangler / Cloudflare
 build/
 dist/
 .wrangler/
-*.wasm
-
-# Node
 node_modules/
-package-lock.json
-
-# Environment
 .env
 .env.local
 .env.production
 
 # IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+.antigravitycli
