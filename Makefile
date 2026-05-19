@@ -35,19 +35,26 @@ lint-backend:
 lint-cli:
 	cd cli && cargo clippy -- -D warnings
 
-# Lint both
-lint: lint-backend lint-cli
+# Human CLI lint (native target)
+lint-h-cli:
+	cd h-cli && cargo clippy -- -D warnings
+
+# Lint all
+lint: lint-backend lint-cli lint-h-cli
 
 # ─── Testing ──────────────────────────────────────────────────────────────────
 
 test:
-	cargo test --all
+	cargo test --workspace --exclude chat-app-backend
 
 test-backend:
 	cargo test
 
 test-cli:
 	cd cli && cargo test
+
+test-h-cli:
+	cd h-cli && cargo test
 
 test-check:
 	cargo check --tests --target wasm32-unknown-unknown

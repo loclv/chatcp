@@ -16,11 +16,10 @@
 
 use clap::{Parser, Subcommand};
 
-mod client;
-mod config;
-mod display;
-mod models;
-mod repl;
+use chat_cli::client::Client;
+use chat_cli::config::Config;
+use chat_cli::display;
+use chat_cli::repl;
 
 /// CLI client for the Chat App Backend — chat with agents and humans from the terminal.
 #[derive(Parser)]
@@ -244,12 +243,12 @@ async fn main() {
     let cli = Cli::parse();
 
     // Override API URL if provided via --api-url flag
-    let mut cfg = config::Config::from_env();
+    let mut cfg = Config::from_env();
     if let Some(url) = &cli.api_url {
         cfg.base_url = url.clone();
     }
 
-    let client = client::Client::new(cfg);
+    let client = Client::new(cfg);
 
     if let Err(e) = dispatch(cli.command, &client).await {
         display::print_error(&e);
@@ -258,7 +257,7 @@ async fn main() {
 }
 
 /// Dispatch the parsed command to the appropriate handler.
-async fn dispatch(command: Commands, client: &client::Client) -> Result<(), String> {
+async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
     match command {
         Commands::Health => {
             client.check_health().await;

@@ -1,0 +1,28 @@
+[package]
+name = "h-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Shared code from the main CLI
+chat-cli = { path = "../cli" }
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive", "env"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# TUI support
+ratatui = "0.26"
+crossterm = { version = "0.27", features = ["event-stream"] }
+
+# Configuration management
+confy = "0.6"
+
+# Error handling
+anyhow = "1"

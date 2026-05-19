@@ -36,8 +36,8 @@ A serverless backend for a multi-agent chat application built with **Rust**, **C
 
 ```
                         ┌─────────────────────────────────┐
-                        │   Chat CLI (Rust Terminal Client) │
-                        │   cli/ — quick commands / REPL   │
+                        │   Human CLI (h-cli) — TUI       │
+                        │   Developer CLI (cli/)          │
                         └──────────┬──────────────────────┘
                                    │ HTTP REST API
                                    ▼
@@ -90,7 +90,9 @@ The backend runs as a **Cloudflare Worker** — a serverless function deployed t
 | **wrangler** | Cloudflare Workers CLI for dev, build, deploy | ^3.0 |
 | **clap** | CLI argument parsing (chat-cli) | 4 (with derive) |
 | **reqwest** | HTTP client for the CLI | 0.12 (with rustls-tls) |
-| **prettytable-rs** | ASCII table formatting (chat-cli) | 0.10 |
+| **ratatui** | TUI library for `h-cli` | 0.26 |
+| **crossterm** | Terminal manipulation for `h-cli` | 0.27 |
+| **prettytable-rs** | ASCII table formatting (`cli`) | 0.10 |
 
 ---
 
@@ -114,31 +116,25 @@ The backend runs as a **Cloudflare Worker** — a serverless function deployed t
 
 ```bash
 # Terminal 1 — Backend
-cd chat-app-backend
 npm install
-npx wrangler d1 create chat-app-db
-# Copy the database_id into wrangler.toml, then:
 make migrate
 make dev
 ```
 
-The server starts at `http://localhost:8787`.
-
-### CLI (in another terminal)
+### Human Chat (TUI)
 
 ```bash
-# Terminal 2 — CLI client
+# Terminal 2 — Human Chat
+cd h-cli
+cargo run
+```
+
+### Developer CLI
+
+```bash
+# Terminal 3 — Developer CLI
 cd cli
-cargo run -- health
-# ✓ Backend is ok (chat-app-backend v0.2.0)
-
-cargo run -- create owner --name "Alice" --email "alice@example.com"
-cargo run -- create agent --name "CodeBot" --description "AI coding assistant"
-cargo run -- create chat --agent-id <agent-uuid> --owner-id <owner-uuid> --title "Debug help"
-cargo run -- send --chat-id <chat-uuid> --as-type owner --sender-id <owner-uuid> --text "Hello!"
-
-# Or jump into the interactive REPL
-cargo run -- repl
+cargo run -- help
 ```
 
 ### Verify with curl
@@ -171,17 +167,14 @@ chat-app-backend/
 ├── migrations/
 │   └── 0001_initial.sql           # D1 schema migration (4 tables + 5 indexes)
 │
-├── cli/                           # 🆕 Rust terminal client (separate crate)
-│   ├── Cargo.toml                 # CLI manifest (binary, native target)
-│   ├── README.md                  # CLI-specific documentation
-│   ├── .gitignore
-│   └── src/
-│       ├── main.rs                # Entry point + clap argument parsing (~230 lines)
-│       ├── client.rs              # HTTP API client for all 17 endpoints
-│       ├── config.rs              # Configuration (env vars, default URL)
-│       ├── display.rs             # Pretty-printing (tables, colors, errors)
-│       ├── models.rs              # Response types matching the backend API
-│       └── repl.rs                # Interactive REPL mode (~340 lines)
+├── cli/                           # Developer CLI (quick commands & REPL)
+│   ├── src/lib.rs                 # Shared library code (client, models)
+│   └── src/main.rs                # Management CLI entry point
+│
+├── h-cli/                         # 🆕 Human Chat CLI (TUI)
+│   ├── src/main.rs                # TUI entry point
+│   ├── src/tui.rs                 # Ratatui rendering logic
+│   └── src/session.rs             # Persistent session management
 │
 ├── docs/                          # Detailed documentation
 │   ├── ARCHITECTURE.md            # Architecture deep dive
