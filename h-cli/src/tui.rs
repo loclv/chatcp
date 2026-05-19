@@ -246,11 +246,9 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
                                 app.input.push(c);
                                 app.cursor_position += 1;
                             }
-                            KeyCode::Backspace => {
-                                if app.cursor_position > 0 {
-                                    app.input.pop();
-                                    app.cursor_position -= 1;
-                                }
+                            KeyCode::Backspace if app.cursor_position > 0 => {
+                                app.input.pop();
+                                app.cursor_position -= 1;
                             }
                             _ => {}
                         },

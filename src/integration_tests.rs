@@ -1,10 +1,8 @@
-use worker::*;
-use crate::models::*;
-use crate::router;
-
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
-    use super::*;
+    use worker::*;
+    use crate::models::*;
+    use crate::router;
 
     // Note: Testing with a real D1 requires miniflare/wrangler.
     // For unit-style integration tests, we can test the router logic.
