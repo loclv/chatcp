@@ -12,3 +12,5 @@ node_modules/
 
 # IDE
 .antigravitycli
+logs/
+*.log
