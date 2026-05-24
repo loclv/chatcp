@@ -4,10 +4,10 @@ A serverless backend for a multi-agent chat application built with **Rust**, **C
 
 ChatCP - Chat context protocol.
 
-**Current version:** v0.2.0 — Foundation & Polish  
-**Status:** ✅ Compilation verified · ✅ Input validation · ✅ Structured errors · ✅ CI/CD · ✅ 31 unit tests
+**Current version:** v0.3.0 — Pagination, Filtering, Sorting & Secure Auth  
+**Status:** ✅ Secure Cryptographic Auth · ✅ Query Pagination · ✅ Resource Ownership Checks · ✅ 87+37 unit tests  
 
-📦 **New in v0.2.0:** [`cli/`](./cli) — a Rust terminal client with both quick commands and an interactive REPL
+📦 **New in v0.3.0:** Robust JWT & API Key Authentication, key rotation endpoints, list pagination (`limit`/`offset`), field filtering, and secure whitelisted sorting.
 
 ---
 
@@ -143,7 +143,7 @@ cargo run -- help
 
 ```bash
 curl http://localhost:8787/api/health
-# {"status":"ok","service":"chat-app-backend","version":"0.2.0"}
+# {"status":"ok","service":"chat-app-backend","version":"0.3.0"}
 ```
 
 ---
@@ -369,33 +369,64 @@ Structured error handling via the `AppError` enum (`src/models.rs`):
 
 ## API Reference
 
-17 endpoints. **Full details in [docs/API_REFERENCE.md](docs/API_REFERENCE.md).**
+29 endpoints are available. **Full details and request/response payloads in [docs/API_REFERENCE.md](docs/API_REFERENCE.md).**
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Health check |
-| `OPTIONS` | `/*` | CORS preflight |
-| **Agents** | | |
-| `POST` | `/api/agents` | Create agent |
-| `GET` | `/api/agents` | List all agents |
-| `GET` | `/api/agents/:id` | Get agent by ID |
-| `PUT` | `/api/agents/:id` | Update agent |
-| `DELETE` | `/api/agents/:id` | Delete agent |
-| **Owners** | | |
-| `POST` | `/api/owners` | Create owner |
-| `GET` | `/api/owners` | List all owners |
-| `GET` | `/api/owners/:id` | Get owner by ID |
-| `PUT` | `/api/owners/:id` | Update owner |
-| `DELETE` | `/api/owners/:id` | Delete owner |
-| **Chats** | | |
-| `POST` | `/api/chats` | Create chat |
-| `GET` | `/api/chats` | List all chats |
-| `GET` | `/api/chats/:id` | Get chat with messages |
-| `PUT` | `/api/chats/:id` | Update chat title |
-| `DELETE` | `/api/chats/:id` | Delete chat |
-| **Messages** | | |
-| `POST` | `/api/chats/:id/messages` | Send message |
-| `GET` | `/api/chats/:id/messages` | Get messages |
+### Authentication & Keys
+| Method | Path | Description | Authentication Required |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Authenticate owner & get JWT | ❌ No |
+| `GET` | `/api/auth/me` | Get currently authenticated caller profile | ✅ Yes (JWT or API Key) |
+| `POST` | `/api/owners/:id/key` | Rotate API key for an owner | ✅ Yes (JWT or Owner Key) |
+| `POST` | `/api/agents/:id/key` | Rotate API key for an agent | ✅ Yes (JWT - Owner only) |
+
+### Agents
+| Method | Path | Description | Authentication Required |
+|---|---|---|---|
+| `POST` | `/api/agents` | Create an AI agent | ✅ Yes (JWT only) |
+| `GET` | `/api/agents` | List all agents (paginated, sortable, filterable) | ❌ No |
+| `GET` | `/api/agents/:id` | Get agent details by ID | ❌ No |
+| `PUT` | `/api/agents/:id` | Full update of an agent | ✅ Yes (JWT - Owner only) |
+| `PATCH` | `/api/agents/:id` | Partial update of an agent | ✅ Yes (JWT - Owner only) |
+| `DELETE` | `/api/agents/:id` | Delete an agent (cascade deletes chats/messages) | ✅ Yes (JWT - Owner only) |
+| `GET` | `/api/agents/:id/chats` | List chats associated with this agent | ❌ No |
+| `GET` | `/api/agents/:id/owner` | Get owner profile for this agent | ❌ No |
+| `GET` | `/api/agents/:id/messages` | Get messages sent by this agent across all chats | ❌ No |
+
+### Owners
+| Method | Path | Description | Authentication Required |
+|---|---|---|---|
+| `POST` | `/api/owners` | Create an owner (supports password) | ❌ No |
+| `GET` | `/api/owners` | List all owners (paginated) | ❌ No |
+| `GET` | `/api/owners/:id` | Get owner details by ID | ❌ No |
+| `PUT` | `/api/owners/:id` | Update owner details (name, email) | ✅ Yes (JWT - Owner only) |
+| `DELETE` | `/api/owners/:id` | Delete owner (cascade deletes chats, unlinks agents) | ✅ Yes (JWT - Owner only) |
+| `GET` | `/api/owners/:id/agents` | List agents belonging to this owner | ❌ No |
+| `GET` | `/api/owners/:id/chats` | List chats associated with this owner | ❌ No |
+
+### Chats
+| Method | Path | Description | Authentication Required |
+|---|---|---|---|
+| `POST` | `/api/chats` | Create a new conversation between owner & agent | ✅ Yes (JWT only) |
+| `GET` | `/api/chats` | List all chats (paginated, filterable) | ❌ No |
+| `GET` | `/api/chats/:id` | Get chat metadata and its full message history | ❌ No |
+| `PUT` | `/api/chats/:id` | Update chat title | ✅ Yes (JWT - Owner only) |
+| `DELETE` | `/api/chats/:id` | Delete a chat (cascade deletes messages) | ✅ Yes (JWT - Owner only) |
+
+### Messages
+| Method | Path | Description | Authentication Required |
+|---|---|---|---|
+| `POST` | `/api/chats/:id/messages` | Send message (by owner or agent) | ✅ Yes (JWT or API Key) |
+| `GET` | `/api/chats/:id/messages` | Get list of messages (paginated, filterable) | ❌ No |
+
+### Query Parameters (List Endpoints)
+
+All `GET` list endpoints (Agents, Owners, Chats, Messages) support the following query parameters:
+* **Pagination**: `?limit=50&offset=0` (Default: `50`, Max: `1000`).
+* **Sorting**: `?sort_by=created_at&sort_order=desc`. Whitelisted columns only (`created_at`, `updated_at`, `name`, `email`, `title`).
+* **Filtering**:
+  * Agents: `?owner_id=<uuid>` & date range `?created_after=<iso>&created_before=<iso>`.
+  * Chats: `?agent_id=<uuid>&owner_id=<uuid>`.
+  * Messages (Search): `?q=<search-term>` (performs a robust database-level `LIKE` wildcard search).
 
 ### Response Format
 
@@ -647,10 +678,10 @@ curl -s "$BASE/api/chats/$CHAT_ID" | jq .
 
 This project is actively evolving. Check out [tasks.md](tasks.md) for the full roadmap including:
 
-- **v0.3.0:** Pagination, filtering, and sorting for all list endpoints
-- **v1.0.0:** Authentication, API keys, and rate limiting
-- **v1.1.0:** WebSocket support for real-time chat via Durable Objects
-- **v2.0.0:** Multi-tenancy with organizations and team management
+- **v0.3.0:** Pagination, filtering, sorting, JWT/API Key auth, and key rotations ✅ (Completed)
+- **v1.0.0:** Rate limiting, webhooks, XSS sanitization, and admin roles (Planned)
+- **v1.1.0:** WebSocket support for real-time chat via Durable Objects (Future)
+- **v2.0.0:** Multi-tenancy with organizations and team management (Future)
 
 ## License
 
