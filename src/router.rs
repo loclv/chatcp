@@ -22,6 +22,11 @@ pub fn build_router() -> Router<'static, ()> {
                 "version": env!("CARGO_PKG_VERSION")
             }))
         })
+        // ─── Auth & Key Rotation ─────────────────────────────────────────────
+        .post_async("/api/auth/login", handlers::login)
+        .get_async("/api/auth/me", handlers::get_me)
+        .post_async("/api/owners/:id/key", handlers::rotate_owner_key)
+        .post_async("/api/agents/:id/key", handlers::rotate_agent_key)
         // ─── Agents CRUD ────────────────────────────────────────────────────
         .post_async("/api/agents", handlers::create_agent)
         .get_async("/api/agents", handlers::list_agents)

@@ -53,12 +53,22 @@ impl Client {
         Ok(resp)
     }
 
+    /// Apply authorization headers if environment variables are present.
+    fn apply_auth(&self, mut builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        if let Ok(key) = std::env::var("CHAT_API_KEY") {
+            builder = builder.header("Authorization", format!("ApiKey {}", key));
+        } else if let Ok(token) = std::env::var("CHAT_JWT_TOKEN") {
+            builder = builder.header("Authorization", format!("Bearer {}", token));
+        }
+        builder
+    }
+
     /// Make a GET request and deserialize the response.
     async fn get_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> CliResult<T> {
         let url = self.config.api_url(path);
-        let resp = self
-            .http
-            .get(&url)
+        let builder = self.http.get(&url);
+        let builder = self.apply_auth(builder);
+        let resp = builder
             .send()
             .await
             .map_err(|e| format!("Request failed: {}", e))?;
@@ -75,10 +85,9 @@ impl Client {
         body: &B,
     ) -> CliResult<T> {
         let url = self.config.api_url(path);
-        let resp = self
-            .http
-            .post(&url)
-            .json(body)
+        let builder = self.http.post(&url).json(body);
+        let builder = self.apply_auth(builder);
+        let resp = builder
             .send()
             .await
             .map_err(|e| format!("Request failed: {}", e))?;
@@ -95,10 +104,9 @@ impl Client {
         body: &B,
     ) -> CliResult<T> {
         let url = self.config.api_url(path);
-        let resp = self
-            .http
-            .put(&url)
-            .json(body)
+        let builder = self.http.put(&url).json(body);
+        let builder = self.apply_auth(builder);
+        let resp = builder
             .send()
             .await
             .map_err(|e| format!("Request failed: {}", e))?;
@@ -111,9 +119,9 @@ impl Client {
     /// Make a DELETE request.
     async fn delete_json<T: serde::de::DeserializeOwned>(&self, path: &str) -> CliResult<T> {
         let url = self.config.api_url(path);
-        let resp = self
-            .http
-            .delete(&url)
+        let builder = self.http.delete(&url);
+        let builder = self.apply_auth(builder);
+        let resp = builder
             .send()
             .await
             .map_err(|e| format!("Request failed: {}", e))?;
@@ -210,14 +218,25 @@ impl Client {
     }
 
     /// Create a new owner.
-    pub async fn create_owner(&self, name: &str, email: &str) -> CliResult<ApiResponse<Owner>> {
+    pub async fn create_owner(
+        &self,
+        name: &str,
+        email: &str,
+        password: Option<&str>,
+    ) -> CliResult<ApiResponse<Owner>> {
         #[derive(Serialize)]
         struct CreateOwnerBody<'a> {
             name: &'a str,
             email: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            password: Option<&'a str>,
         }
 
-        let body = CreateOwnerBody { name, email };
+        let body = CreateOwnerBody {
+            name,
+            email,
+            password,
+        };
         self.post_json("/api/owners", &body).await
     }
 
@@ -589,5 +608,51 @@ impl Client {
             },
             Err(e) => display::print_api_error(&e, None),
         }
+    }
+
+    // ─── Authentication & Key Rotation ──────────────────────────────────────
+
+    /// Login with email and password to retrieve JWT.
+    pub async fn login(
+        &self,
+        email: &str,
+        password: &str,
+    ) -> CliResult<ApiResponse<LoginResponseData>> {
+        #[derive(Serialize)]
+        struct LoginBody<'a> {
+            email: &'a str,
+            password: &'a str,
+        }
+        let body = LoginBody { email, password };
+        self.post_json("/api/auth/login", &body).await
+    }
+
+    /// Retrieve logged in user's profile.
+    pub async fn get_me(&self) -> CliResult<ApiResponse<serde_json::Value>> {
+        self.get_json("/api/auth/me").await
+    }
+
+    /// Rotate owner API key.
+    pub async fn rotate_owner_key(
+        &self,
+        owner_id: &str,
+    ) -> CliResult<ApiResponse<serde_json::Value>> {
+        self.post_json(
+            &format!("/api/owners/{}/key", owner_id),
+            &serde_json::json!({}),
+        )
+        .await
+    }
+
+    /// Rotate agent API key.
+    pub async fn rotate_agent_key(
+        &self,
+        agent_id: &str,
+    ) -> CliResult<ApiResponse<serde_json::Value>> {
+        self.post_json(
+            &format!("/api/agents/{}/key", agent_id),
+            &serde_json::json!({}),
+        )
+        .await
     }
 }

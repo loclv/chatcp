@@ -338,6 +338,7 @@ mod tests {
             name: "TestBot".into(),
             description: "A test agent".into(),
             owner_id: owner.map(|s| s.into()),
+            api_key: None,
             created_at: "2025-01-01 00:00:00".into(),
             updated_at: "2025-01-01 00:00:00".into(),
         }
@@ -370,6 +371,9 @@ mod tests {
             id: "f47ac10b-58cc-4372-a567-0e02b2c3d479".into(),
             name: "Alice".into(),
             email: "alice@test.com".into(),
+            password_hash: None,
+            salt: None,
+            api_key: None,
             created_at: "2025-01-01".into(),
         }
     }
@@ -513,6 +517,7 @@ mod tests {
             name: "LongDescBot".into(),
             description: "A very long description that exceeds thirty characters for truncation testing purposes".into(),
             owner_id: Some("f47ac10b-58cc-4372-a567-0e02b2c3d479".into()),
+            api_key: None,
             created_at: "2025-01-01 00:00:00".into(),
             updated_at: "2025-01-01 00:00:00".into(),
         }

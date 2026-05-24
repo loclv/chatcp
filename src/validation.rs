@@ -170,6 +170,23 @@ impl Validator for CreateOwnerRequest {
     fn validate(&self) -> std::result::Result<(), AppError> {
         validate_name(&self.name, "name")?;
         validate_email(&self.email, "email")?;
+        if let Some(password) = &self.password {
+            if password.len() < 8 {
+                return Err(AppError::Validation(
+                    "password must be at least 8 characters".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Validator for LoginRequest {
+    fn validate(&self) -> std::result::Result<(), AppError> {
+        validate_email(&self.email, "email")?;
+        if self.password.is_empty() {
+            return Err(AppError::Validation("password is required".to_string()));
+        }
         Ok(())
     }
 }
@@ -412,6 +429,7 @@ mod tests {
         let req = CreateOwnerRequest {
             name: "Alice".to_string(),
             email: "alice@example.com".to_string(),
+            password: None,
         };
         assert!(req.validate().is_ok());
     }
@@ -421,6 +439,7 @@ mod tests {
         let req = CreateOwnerRequest {
             name: "Alice".to_string(),
             email: "not-an-email".to_string(),
+            password: None,
         };
         assert!(req.validate().is_err());
     }

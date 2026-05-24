@@ -139,6 +139,10 @@ enum CreateCommands {
         /// Owner email.
         #[arg(short, long)]
         email: String,
+
+        /// Optional password.
+        #[arg(short, long)]
+        password: Option<String>,
     },
     /// Create a new chat between an agent and an owner.
     Chat {
@@ -305,8 +309,15 @@ async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
                     Err(e) => Err(e),
                 }
             },
-            CreateCommands::Owner { name, email } => {
-                match client.create_owner(&name, &email).await {
+            CreateCommands::Owner {
+                name,
+                email,
+                password,
+            } => {
+                match client
+                    .create_owner(&name, &email, password.as_deref())
+                    .await
+                {
                     Ok(resp) => {
                         if let Some(owner) = resp.data {
                             display::print_success("Owner created!");
@@ -585,9 +596,15 @@ mod tests {
             "alice@example.com",
         ])
         .unwrap();
-        if let Commands::Create(CreateCommands::Owner { name, email }) = cli.command {
+        if let Commands::Create(CreateCommands::Owner {
+            name,
+            email,
+            password,
+        }) = cli.command
+        {
             assert_eq!(name, "Alice");
             assert_eq!(email, "alice@example.com");
+            assert_eq!(password, None);
         } else {
             panic!("Expected Create Owner command");
         }

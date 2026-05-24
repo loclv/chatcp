@@ -137,10 +137,28 @@ mod tests {
 
 pub async fn create_agent(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
-    let body = match parse_and_validate::<CreateAgentRequest>(&mut req).await {
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let owner = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let mut body = match parse_and_validate::<CreateAgentRequest>(&mut req).await {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
+
+    body.owner_id = Some(owner.id);
+
     let resp = db::create_agent(&d1, &body).await?;
     Ok(with_cors(resp))
 }
@@ -165,6 +183,38 @@ pub async fn get_agent(_req: Request, ctx: RouteContext<()>) -> Result<Response>
 pub async fn update_agent(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
     let id = ctx.param("id").map_or("", |v| v.as_str());
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let owner = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let agent = match db::get_agent_raw(&d1, id).await? {
+        Some(a) => a,
+        None => {
+            return Ok(with_cors(
+                AppError::NotFound(format!("Agent '{}' not found", id)).into_response()?,
+            ))
+        },
+    };
+
+    if agent.owner_id != Some(owner.id) {
+        return Ok(with_cors(
+            AppError::BadRequest("You can only modify agents you own".to_string())
+                .into_response()?,
+        ));
+    }
+
     let body = match parse_and_validate::<UpdateAgentRequest>(&mut req).await {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
@@ -176,6 +226,38 @@ pub async fn update_agent(mut req: Request, ctx: RouteContext<()>) -> Result<Res
 pub async fn delete_agent(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
     let id = ctx.param("id").map_or("", |v| v.as_str());
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&_req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let owner = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let agent = match db::get_agent_raw(&d1, id).await? {
+        Some(a) => a,
+        None => {
+            return Ok(with_cors(
+                AppError::NotFound(format!("Agent '{}' not found", id)).into_response()?,
+            ))
+        },
+    };
+
+    if agent.owner_id != Some(owner.id) {
+        return Ok(with_cors(
+            AppError::BadRequest("You can only delete agents you own".to_string())
+                .into_response()?,
+        ));
+    }
+
     let resp = db::delete_agent(&d1, id).await?;
     Ok(with_cors(resp))
 }
@@ -304,10 +386,46 @@ pub async fn get_owner_chats(req: Request, ctx: RouteContext<()>) -> Result<Resp
 
 pub async fn create_chat(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
-    let body = match parse_and_validate::<CreateChatRequest>(&mut req).await {
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let owner = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let mut body = match parse_and_validate::<CreateChatRequest>(&mut req).await {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
+
+    let agent = match db::get_agent_raw(&d1, &body.agent_id).await? {
+        Some(a) => a,
+        None => {
+            return Ok(with_cors(
+                AppError::NotFound(format!("Agent '{}' not found", body.agent_id))
+                    .into_response()?,
+            ))
+        },
+    };
+
+    if agent.owner_id != Some(owner.id.clone()) {
+        return Ok(with_cors(
+            AppError::BadRequest("You can only create chats with agents you own".to_string())
+                .into_response()?,
+        ));
+    }
+
+    body.owner_id = owner.id;
+
     let resp = db::create_chat(&d1, &body).await?;
     Ok(with_cors(resp))
 }
@@ -332,6 +450,38 @@ pub async fn get_chat_with_messages(_req: Request, ctx: RouteContext<()>) -> Res
 pub async fn update_chat(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
     let id = ctx.param("id").map_or("", |v| v.as_str());
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let owner = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let chat = match db::get_chat_raw(&d1, id).await? {
+        Some(c) => c,
+        None => {
+            return Ok(with_cors(
+                AppError::NotFound(format!("Chat '{}' not found", id)).into_response()?,
+            ))
+        },
+    };
+
+    if chat.owner_id != owner.id {
+        return Ok(with_cors(
+            AppError::BadRequest("You can only modify chats you own".to_string())
+                .into_response()?,
+        ));
+    }
+
     let body = match parse_and_validate::<UpdateChatRequest>(&mut req).await {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
@@ -343,6 +493,38 @@ pub async fn update_chat(mut req: Request, ctx: RouteContext<()>) -> Result<Resp
 pub async fn delete_chat(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
     let id = ctx.param("id").map_or("", |v| v.as_str());
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&_req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let owner = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let chat = match db::get_chat_raw(&d1, id).await? {
+        Some(c) => c,
+        None => {
+            return Ok(with_cors(
+                AppError::NotFound(format!("Chat '{}' not found", id)).into_response()?,
+            ))
+        },
+    };
+
+    if chat.owner_id != owner.id {
+        return Ok(with_cors(
+            AppError::BadRequest("You can only delete chats you own".to_string())
+                .into_response()?,
+        ));
+    }
+
     let resp = db::delete_chat(&d1, id).await?;
     Ok(with_cors(resp))
 }
@@ -352,10 +534,56 @@ pub async fn delete_chat(_req: Request, ctx: RouteContext<()>) -> Result<Respons
 pub async fn send_message(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let d1 = ctx.d1("DB")?;
     let chat_id = ctx.param("id").map_or("", |v| v.as_str());
-    let body = match parse_and_validate::<SendMessageRequest>(&mut req).await {
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let chat = match db::get_chat_raw(&d1, chat_id).await? {
+        Some(c) => c,
+        None => {
+            return Ok(with_cors(
+                AppError::NotFound(format!("Chat '{}' not found", chat_id)).into_response()?,
+            ))
+        },
+    };
+
+    let mut body = match parse_and_validate::<SendMessageRequest>(&mut req).await {
         Ok(b) => b,
         Err(resp) => return Ok(with_cors(resp)),
     };
+
+    match auth {
+        crate::auth::AuthContext::Owner(owner) => {
+            if chat.owner_id != owner.id {
+                return Ok(with_cors(
+                    AppError::BadRequest("You do not have access to this chat".to_string())
+                        .into_response()?,
+                ));
+            }
+            body.sender_type = "owner".to_string();
+            body.sender_id = owner.id;
+        },
+        crate::auth::AuthContext::Agent(agent) => {
+            if chat.agent_id != agent.id {
+                return Ok(with_cors(
+                    AppError::BadRequest(
+                        "You are not the assigned agent for this chat".to_string(),
+                    )
+                    .into_response()?,
+                ));
+            }
+            body.sender_type = "agent".to_string();
+            body.sender_id = agent.id;
+        },
+    }
+
     let resp = db::send_message(&d1, chat_id, &body).await?;
     Ok(with_cors(resp))
 }
@@ -369,4 +597,164 @@ pub async fn get_messages(req: Request, ctx: RouteContext<()>) -> Result<Respons
     };
     let resp = db::get_messages(&d1, chat_id, &params).await?;
     Ok(with_cors(resp))
+}
+
+// ─── Authentication Handlers ─────────────────────────────────────────────────
+
+pub async fn login(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let body = match parse_and_validate::<LoginRequest>(&mut req).await {
+        Ok(b) => b,
+        Err(resp) => return Ok(with_cors(resp)),
+    };
+
+    let owner = match db::get_owner_by_email(&d1, &body.email).await? {
+        Some(o) => o,
+        None => {
+            return Ok(with_cors(
+                AppError::Validation("Invalid email or password".to_string()).into_response()?,
+            ))
+        },
+    };
+
+    let stored_hash = match &owner.password_hash {
+        Some(h) => h,
+        None => {
+            return Ok(with_cors(
+                AppError::Validation("Account has no password configured".to_string())
+                    .into_response()?,
+            ))
+        },
+    };
+
+    let stored_salt = match &owner.salt {
+        Some(s) => s,
+        None => {
+            return Ok(with_cors(
+                AppError::Validation("Account has no salt configured".to_string())
+                    .into_response()?,
+            ))
+        },
+    };
+
+    let input_hash = crate::auth::hash_password(&body.password, stored_salt);
+    if input_hash != *stored_hash {
+        return Ok(with_cors(
+            AppError::Validation("Invalid email or password".to_string()).into_response()?,
+        ));
+    }
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let token = crate::auth::generate_jwt(&owner.id, &secret, 86400)?; // 24 hours
+
+    let resp = ApiResponse::success(serde_json::json!({
+        "token": token,
+        "owner": owner
+    }));
+    Ok(with_cors(Response::from_json(&resp)?))
+}
+
+pub async fn rotate_owner_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let id = ctx.param("id").map_or("", |v| v.as_str());
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let caller = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    if caller.id != id {
+        return Ok(with_cors(
+            AppError::BadRequest("You can only rotate your own API key".to_string())
+                .into_response()?,
+        ));
+    }
+
+    let new_key = db::rotate_owner_api_key(&d1, id).await?;
+    let resp = ApiResponse::success(serde_json::json!({
+        "api_key": new_key
+    }));
+    Ok(with_cors(Response::from_json(&resp)?))
+}
+
+pub async fn rotate_agent_key(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let id = ctx.param("id").map_or("", |v| v.as_str());
+
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let caller = match auth.get_owner() {
+        Ok(o) => o,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let agent = match db::get_agent_raw(&d1, id).await? {
+        Some(a) => a,
+        None => {
+            return Ok(with_cors(
+                AppError::NotFound(format!("Agent '{}' not found", id)).into_response()?,
+            ))
+        },
+    };
+
+    if agent.owner_id != Some(caller.id) {
+        return Ok(with_cors(
+            AppError::BadRequest("You can only rotate keys for agents you own".to_string())
+                .into_response()?,
+        ));
+    }
+
+    let new_key = db::rotate_agent_api_key(&d1, id).await?;
+    let resp = ApiResponse::success(serde_json::json!({
+        "api_key": new_key
+    }));
+    Ok(with_cors(Response::from_json(&resp)?))
+}
+
+pub async fn get_me(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let d1 = ctx.d1("DB")?;
+    let secret = match ctx.var("JWT_SECRET") {
+        Ok(s) => s.to_string(),
+        Err(_) => "fallback_secret_key_1234567890".to_string(),
+    };
+
+    let auth = match crate::auth::authenticate_request(&req, &d1, &secret).await {
+        Ok(a) => a,
+        Err(e) => return Ok(with_cors(e.into_response()?)),
+    };
+
+    let resp = match auth {
+        crate::auth::AuthContext::Owner(owner) => ApiResponse::success(serde_json::json!({
+            "type": "owner",
+            "profile": owner
+        })),
+        crate::auth::AuthContext::Agent(agent) => ApiResponse::success(serde_json::json!({
+            "type": "agent",
+            "profile": agent
+        })),
+    };
+
+    Ok(with_cors(Response::from_json(&resp)?))
 }

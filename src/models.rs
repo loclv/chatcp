@@ -130,6 +130,8 @@ pub struct Agent {
     #[serde(default)]
     pub description: String,
     pub owner_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -160,6 +162,12 @@ pub struct Owner {
     pub id: String,
     pub name: String,
     pub email: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub salt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
     pub created_at: String,
 }
 
@@ -167,6 +175,13 @@ pub struct Owner {
 pub struct CreateOwnerRequest {
     pub name: String,
     pub email: String,
+    pub password: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginRequest {
+    pub email: String,
+    pub password: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -416,6 +431,7 @@ mod tests {
             name: "TestBot".to_string(),
             description: "A test agent".to_string(),
             owner_id: Some("owner-456".to_string()),
+            api_key: None,
             created_at: "2025-01-01 00:00:00".to_string(),
             updated_at: "2025-01-01 00:00:00".to_string(),
         };

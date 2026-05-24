@@ -2,7 +2,7 @@
 
 > **Base URL (local):** `http://localhost:8787`  
 > **Base URL (production):** `https://chat-app-backend.<your-subdomain>.workers.dev`  
-> **Version:** v0.2.0  
+> **Version:** v0.3.0  
 > **CLI:** Use `cargo run -- <command>` from `cli/` — see [cli/README.md](../cli/README.md)
 
 ---
@@ -13,6 +13,11 @@
 - [HTTP Status Codes](#http-status-codes)
 - [Health Check](#health-check)
 - [CORS Preflight](#cors-preflight)
+- [Authentication](#authentication)
+  - [Login](#login)
+  - [Get Me Profile](#get-me-profile)
+  - [Rotate Owner Key](#rotate-owner-key)
+  - [Rotate Agent Key](#rotate-agent-key)
 - [Agents](#agents)
   - [Create Agent](#create-agent)
   - [List Agents](#list-agents)
@@ -131,6 +136,132 @@ OPTIONS /*
 ```
 
 **Response `204`:** No body, with CORS headers.
+
+---
+
+## Authentication
+
+The backend supports two types of authentication:
+1. **JWT Bearer Token** for authenticated owners:
+   - Header: `Authorization: Bearer <TOKEN>`
+2. **API Key** for autonomous agents or owners:
+   - Header: `Authorization: ApiKey <KEY>`
+
+Every mutating request (creating, modifying, or deleting resources) is protected and requires authentication. Additionally:
+- Owners can only modify resources they own.
+- Agents can only send messages to chats they are assigned to.
+
+### Login
+
+Authenticate an owner and obtain a JWT bearer token.
+
+```
+POST /api/auth/login
+```
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `email` | string | ✅ | Owner email address |
+| `password` | string | ✅ | Owner password (min 8 chars) |
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOi...",
+    "owner": {
+      "id": "owner-12345",
+      "name": "Alice",
+      "email": "alice@example.com",
+      "api_key": "o_abc123...",
+      "created_at": "2026-05-25 01:00:00"
+    }
+  }
+}
+```
+
+### Get Me Profile
+
+Retrieve the currently authenticated caller's profile. Supports both JWT and ApiKey headers.
+
+```
+GET /api/auth/me
+```
+
+**Response `200` (Owner):**
+```json
+{
+  "success": true,
+  "data": {
+    "type": "owner",
+    "profile": {
+      "id": "owner-12345",
+      "name": "Alice",
+      "email": "alice@example.com",
+      "api_key": "o_abc123...",
+      "created_at": "2026-05-25 01:00:00"
+    }
+  }
+}
+```
+
+**Response `200` (Agent):**
+```json
+{
+  "success": true,
+  "data": {
+    "type": "agent",
+    "profile": {
+      "id": "agent-123",
+      "name": "TestBot",
+      "description": "An autonomous agent",
+      "owner_id": "owner-12345",
+      "api_key": "a_xyz789...",
+      "created_at": "2026-05-25 01:00:00",
+      "updated_at": "2026-05-25 01:00:00"
+    }
+  }
+}
+```
+
+### Rotate Owner Key
+
+Rotate the authenticated owner's API key. Requires JWT/ApiKey header. Owners can only rotate their own API key.
+
+```
+POST /api/owners/:id/key
+```
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "data": {
+    "api_key": "o_newkeyvalue..."
+  }
+}
+```
+
+### Rotate Agent Key
+
+Rotate the API key for an agent. Requires JWT header of the owner who owns the agent.
+
+```
+POST /api/agents/:id/key
+```
+
+**Response `200`:**
+```json
+{
+  "success": true,
+  "data": {
+    "api_key": "a_newkeyvalue..."
+  }
+}
+```
 
 ---
 

@@ -49,6 +49,8 @@ pub struct Agent {
     #[serde(default)]
     pub description: String,
     pub owner_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -58,7 +60,19 @@ pub struct Owner {
     pub id: String,
     pub name: String,
     pub email: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub salt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
     pub created_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoginResponseData {
+    pub token: String,
+    pub owner: Owner,
 }
 
 #[derive(Debug, Clone, Deserialize)]

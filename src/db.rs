@@ -333,14 +333,30 @@ pub async fn delete_agent(d1: &D1Database, id: &str) -> Result<Response> {
 pub async fn create_owner(d1: &D1Database, req: &CreateOwnerRequest) -> Result<Response> {
     let id = generate_id();
 
+    let (hash, salt, api_key) = if let Some(password) = &req.password {
+        let salt_str = generate_id().replace("-", "");
+        let hash_str = crate::auth::hash_password(password, &salt_str);
+        let api_key_str = format!("o_{}", generate_id().replace("-", ""));
+        (
+            JsValue::from_str(&hash_str),
+            JsValue::from_str(&salt_str),
+            JsValue::from_str(&api_key_str),
+        )
+    } else {
+        (JsValue::null(), JsValue::null(), JsValue::null())
+    };
+
     let result = d1
         .prepare(
-            "INSERT INTO owners (id, name, email, created_at) VALUES (?, ?, ?, datetime('now'))",
+            "INSERT INTO owners (id, name, email, password_hash, salt, api_key, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))",
         )
         .bind(&[
             id.as_str().into(),
             req.name.as_str().into(),
             req.email.as_str().into(),
+            hash,
+            salt,
+            api_key,
         ])?
         .run()
         .await;
@@ -731,4 +747,59 @@ pub async fn get_messages(
         },
         Err(e) => AppError::Database(format!("Failed to get messages: {}", e)).into_response(),
     }
+}
+
+// ─── Authentication Operations ──────────────────────────────────────────────
+
+pub async fn get_owner_raw(d1: &D1Database, id: &str) -> Result<Option<Owner>> {
+    get_owner_by_id(d1, id).await
+}
+
+pub async fn get_owner_by_email(d1: &D1Database, email: &str) -> Result<Option<Owner>> {
+    let result = d1
+        .prepare("SELECT * FROM owners WHERE email = ?")
+        .bind(&[email.into()])?
+        .first::<Owner>(None)
+        .await?;
+    Ok(result)
+}
+
+pub async fn get_owner_by_api_key(d1: &D1Database, api_key: &str) -> Result<Option<Owner>> {
+    let result = d1
+        .prepare("SELECT * FROM owners WHERE api_key = ?")
+        .bind(&[api_key.into()])?
+        .first::<Owner>(None)
+        .await?;
+    Ok(result)
+}
+
+pub async fn get_agent_by_api_key(d1: &D1Database, api_key: &str) -> Result<Option<Agent>> {
+    let result = d1
+        .prepare("SELECT * FROM agents WHERE api_key = ?")
+        .bind(&[api_key.into()])?
+        .first::<Agent>(None)
+        .await?;
+    Ok(result)
+}
+
+pub async fn rotate_owner_api_key(d1: &D1Database, id: &str) -> Result<String> {
+    let new_key = format!("o_{}", generate_id().replace("-", ""));
+    d1.prepare("UPDATE owners SET api_key = ? WHERE id = ?")
+        .bind(&[new_key.clone().into(), id.into()])?
+        .run()
+        .await?;
+    Ok(new_key)
+}
+
+pub async fn rotate_agent_api_key(d1: &D1Database, id: &str) -> Result<String> {
+    let new_key = format!("a_{}", generate_id().replace("-", ""));
+    d1.prepare("UPDATE agents SET api_key = ? WHERE id = ?")
+        .bind(&[new_key.clone().into(), id.into()])?
+        .run()
+        .await?;
+    Ok(new_key)
+}
+
+pub async fn get_chat_raw(d1: &D1Database, id: &str) -> Result<Option<Chat>> {
+    get_chat_by_id(d1, id).await
 }

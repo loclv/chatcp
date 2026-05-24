@@ -5,6 +5,7 @@
 
 use worker::*;
 
+mod auth;
 mod db;
 mod handlers;
 mod models;
