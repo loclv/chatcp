@@ -297,7 +297,7 @@
 |---------|-------|------------------|--------|
 | **v0.1.0** | MVP | Basic CRUD API, D1 schema, 17 endpoints | ✅ Complete |
 | **v0.2.0** | Foundation | Input validation, AppError, router separation, CI, 31 tests, Makefile, docs | ✅ Complete |
-| **v0.3.0** | Pagination & Filtering | Paginated list endpoints, query param filtering, sort support | ⬜ Upcoming |
+| **v0.3.0** | Pagination & Filtering | Paginated list endpoints, query param filtering, sort support | ✅ Complete |
 | **v1.0.0** | Production | JWT auth, API keys, rate limiting, observability | ⬜ Planned |
 | **v1.1.0** | Real-time | WebSocket support (Durable Objects) | ⬜ Future |
 | **v1.2.0** | Rich messages | Attachments, reactions, message editing/deletion | ⬜ Future |
@@ -315,23 +315,23 @@ Deliver pagination and filtering for all list endpoints, making the API suitable
 
 | Task | Est. Effort | Dependencies | Status |
 |------|-------------|--------------|--------|
-| Add `PaginationParams` struct to models.rs | 30m | None | ⬜ |
-| Parse `limit` and `offset` query params in handlers | 1h | PaginationParams | ⬜ |
-| Update all list DB queries to use LIMIT/OFFSET | 3h | PaginationParams | ⬜ |
-| Update response format with pagination metadata | 1h | DB updates | ⬜ |
-| Add `?owner_id=` filter to GET /api/agents | 2h | Pagination | ⬜ |
-| Add `?agent_id=` and `?owner_id=` filter to GET /api/chats | 3h | Pagination | ⬜ |
-| Write integration tests for pagination & filtering | 4h | All above | ⬜ |
+| Add `PaginationParams` struct to models.rs | 30m | None | ✅ |
+| Parse `limit` and `offset` query params in handlers | 1h | PaginationParams | ✅ |
+| Update all list DB queries to use LIMIT/OFFSET | 3h | PaginationParams | ✅ |
+| Update response format with pagination metadata | 1h | DB updates | ✅ |
+| Add `?owner_id=` filter to GET /api/agents | 2h | Pagination | ✅ |
+| Add `?agent_id=` and `?owner_id=` filter to GET /api/chats | 3h | Pagination | ✅ |
+| Write integration tests for pagination & filtering | 4h | All above | ✅ |
 
 **Total estimated effort:** ~14.5 hours
 
 ### Acceptance Criteria
-- [ ] All list endpoints accept `limit` and `offset` query params
-- [ ] Default limit of 50, max limit of 1,000 enforced
-- [ ] Response includes `pagination` object with `limit`, `offset`, `total`, `has_more`
-- [ ] `GET /api/agents` supports `?owner_id=<uuid>` filter
-- [ ] `GET /api/chats` supports `?agent_id=<uuid>&owner_id=<uuid>` filter
-- [ ] Invalid pagination params return 400 with descriptive error
+- [x] All list endpoints accept `limit` and `offset` query params
+- [x] Default limit of 50, max limit of 1,000 enforced
+- [x] Response includes `pagination` object with `limit`, `offset`, `total`, `has_more`
+- [x] `GET /api/agents` supports `?owner_id=<uuid>` filter
+- [x] `GET /api/chats` supports `?agent_id=<uuid>&owner_id=<uuid>` filter
+- [x] Invalid pagination params return 400 with descriptive error
 
 ---
 

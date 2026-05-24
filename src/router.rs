@@ -13,10 +13,7 @@ pub fn build_router() -> Router<'static, ()> {
 
     router
         // ─── CORS preflight ─────────────────────────────────────────────────
-        .options_async("/*", |_req, _ctx| async move {
-            handlers::handle_options()
-        })
-
+        .options_async("/*", |_req, _ctx| async move { handlers::handle_options() })
         // ─── Health ─────────────────────────────────────────────────────────
         .get_async("/api/health", |_req, _ctx| async move {
             Response::from_json(&serde_json::json!({
@@ -25,7 +22,6 @@ pub fn build_router() -> Router<'static, ()> {
                 "version": env!("CARGO_PKG_VERSION")
             }))
         })
-
         // ─── Agents CRUD ────────────────────────────────────────────────────
         .post_async("/api/agents", handlers::create_agent)
         .get_async("/api/agents", handlers::list_agents)
@@ -36,7 +32,6 @@ pub fn build_router() -> Router<'static, ()> {
         .get_async("/api/agents/:id/chats", handlers::get_agent_chats)
         .get_async("/api/agents/:id/owner", handlers::get_agent_owner)
         .get_async("/api/agents/:id/messages", handlers::get_agent_messages)
-
         // ─── Owners CRUD ────────────────────────────────────────────────────
         .post_async("/api/owners", handlers::create_owner)
         .get_async("/api/owners", handlers::list_owners)
@@ -45,18 +40,15 @@ pub fn build_router() -> Router<'static, ()> {
         .delete_async("/api/owners/:id", handlers::delete_owner)
         .get_async("/api/owners/:id/agents", handlers::get_owner_agents)
         .get_async("/api/owners/:id/chats", handlers::get_owner_chats)
-
         // ─── Chats CRUD ─────────────────────────────────────────────────────
         .post_async("/api/chats", handlers::create_chat)
         .get_async("/api/chats", handlers::list_chats)
         .get_async("/api/chats/:id", handlers::get_chat_with_messages)
         .put_async("/api/chats/:id", handlers::update_chat)
         .delete_async("/api/chats/:id", handlers::delete_chat)
-
         // ─── Messages ────────────────────────────────────────────────────────
         .post_async("/api/chats/:id/messages", handlers::send_message)
         .get_async("/api/chats/:id/messages", handlers::get_messages)
-
         // ─── 404 fallback ────────────────────────────────────────────────────
         .or_else_any_method_async("/*", |_req, _ctx| async move {
             Response::error("Not Found", 404)

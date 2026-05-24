@@ -189,9 +189,10 @@ enum UpdateCommands {
 
         /// New description.
         #[arg(short, long)]
-        description: Option<String>,                    /// New owner ID.
-                    #[arg(short = 'o', long)]
-                    owner_id: Option<String>,
+        description: Option<String>,
+        /// New owner ID.
+        #[arg(short = 'o', long)]
+        owner_id: Option<String>,
     },
     /// Update an owner.
     Owner {
@@ -262,26 +263,26 @@ async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
         Commands::Health => {
             client.check_health().await;
             Ok(())
-        }
+        },
 
         Commands::Repl { chat_id: _ } => {
             repl::run(client).await;
             Ok(())
-        }
+        },
 
         Commands::List(list_cmd) => match list_cmd {
             ListCommands::Agents => {
                 client.print_agents().await;
                 Ok(())
-            }
+            },
             ListCommands::Owners => {
                 client.print_owners().await;
                 Ok(())
-            }
+            },
             ListCommands::Chats => {
                 client.print_chats().await;
                 Ok(())
-            }
+            },
         },
 
         Commands::Create(create_cmd) => match create_cmd {
@@ -300,10 +301,10 @@ async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
                             display::print_agent(&agent);
                         }
                         Ok(())
-                    }
+                    },
                     Err(e) => Err(e),
                 }
-            }
+            },
             CreateCommands::Owner { name, email } => {
                 match client.create_owner(&name, &email).await {
                     Ok(resp) => {
@@ -312,59 +313,58 @@ async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
                             display::print_owner(&owner);
                         }
                         Ok(())
-                    }
+                    },
                     Err(e) => Err(e),
                 }
-            }
+            },
             CreateCommands::Chat {
                 agent_id,
                 owner_id,
                 title,
             } => {
-                match client.create_chat(&agent_id, &owner_id, title.as_deref()).await {
+                match client
+                    .create_chat(&agent_id, &owner_id, title.as_deref())
+                    .await
+                {
                     Ok(resp) => {
                         if let Some(chat) = resp.data {
                             display::print_success("Chat created!");
                             display::print_chat(&chat);
                         }
                         Ok(())
-                    }
+                    },
                     Err(e) => Err(e),
                 }
-            }
+            },
         },
 
         Commands::Get(get_cmd) => match get_cmd {
-            GetCommands::Agent { id } => {
-                match client.get_agent(&id).await {
-                    Ok(resp) => {
-                        if let Some(agent) = resp.data {
-                            display::print_agent(&agent);
-                        } else {
-                            display::print_error("Agent not found");
-                        }
-                        Ok(())
+            GetCommands::Agent { id } => match client.get_agent(&id).await {
+                Ok(resp) => {
+                    if let Some(agent) = resp.data {
+                        display::print_agent(&agent);
+                    } else {
+                        display::print_error("Agent not found");
                     }
-                    Err(e) => Err(e),
-                }
-            }
-            GetCommands::Owner { id } => {
-                match client.get_owner(&id).await {
-                    Ok(resp) => {
-                        if let Some(owner) = resp.data {
-                            display::print_owner(&owner);
-                        } else {
-                            display::print_error("Owner not found");
-                        }
-                        Ok(())
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            },
+            GetCommands::Owner { id } => match client.get_owner(&id).await {
+                Ok(resp) => {
+                    if let Some(owner) = resp.data {
+                        display::print_owner(&owner);
+                    } else {
+                        display::print_error("Owner not found");
                     }
-                    Err(e) => Err(e),
-                }
-            }
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            },
             GetCommands::Chat { id } => {
                 client.print_chat(&id).await;
                 Ok(())
-            }
+            },
         },
 
         Commands::Update(update_cmd) => match update_cmd {
@@ -375,7 +375,12 @@ async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
                 owner_id,
             } => {
                 match client
-                    .update_agent(&id, name.as_deref(), description.as_deref(), owner_id.as_deref())
+                    .update_agent(
+                        &id,
+                        name.as_deref(),
+                        description.as_deref(),
+                        owner_id.as_deref(),
+                    )
                     .await
                 {
                     Ok(resp) => {
@@ -384,64 +389,59 @@ async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
                             display::print_agent(&agent);
                         }
                         Ok(())
-                    }
+                    },
                     Err(e) => Err(e),
                 }
-            }
+            },
             UpdateCommands::Owner { id, name, email } => {
-                match client.update_owner(&id, name.as_deref(), email.as_deref()).await {
+                match client
+                    .update_owner(&id, name.as_deref(), email.as_deref())
+                    .await
+                {
                     Ok(resp) => {
                         if let Some(owner) = resp.data {
                             display::print_success("Owner updated!");
                             display::print_owner(&owner);
                         }
                         Ok(())
-                    }
+                    },
                     Err(e) => Err(e),
                 }
-            }
-            UpdateCommands::Chat { id, title } => {
-                match client.update_chat(&id, &title).await {
-                    Ok(resp) => {
-                        if let Some(chat) = resp.data {
-                            display::print_success("Chat updated!");
-                            display::print_chat_with_messages(&chat);
-                        }
-                        Ok(())
+            },
+            UpdateCommands::Chat { id, title } => match client.update_chat(&id, &title).await {
+                Ok(resp) => {
+                    if let Some(chat) = resp.data {
+                        display::print_success("Chat updated!");
+                        display::print_chat_with_messages(&chat);
                     }
-                    Err(e) => Err(e),
-                }
-            }
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            },
         },
 
         Commands::Delete(delete_cmd) => match delete_cmd {
-            DeleteCommands::Agent { id } => {
-                match client.delete_agent(&id).await {
-                    Ok(_) => {
-                        display::print_success("Agent deleted!");
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-            DeleteCommands::Owner { id } => {
-                match client.delete_owner(&id).await {
-                    Ok(_) => {
-                        display::print_success("Owner deleted!");
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-            DeleteCommands::Chat { id } => {
-                match client.delete_chat(&id).await {
-                    Ok(_) => {
-                        display::print_success("Chat deleted!");
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                }
-            }
+            DeleteCommands::Agent { id } => match client.delete_agent(&id).await {
+                Ok(_) => {
+                    display::print_success("Agent deleted!");
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            },
+            DeleteCommands::Owner { id } => match client.delete_owner(&id).await {
+                Ok(_) => {
+                    display::print_success("Owner deleted!");
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            },
+            DeleteCommands::Chat { id } => match client.delete_chat(&id).await {
+                Ok(_) => {
+                    display::print_success("Chat deleted!");
+                    Ok(())
+                },
+                Err(e) => Err(e),
+            },
         },
 
         Commands::Send {
@@ -454,18 +454,16 @@ async fn dispatch(command: Commands, client: &Client) -> Result<(), String> {
                 .send_and_print(&chat_id, &as_type, &sender_id, &text)
                 .await;
             Ok(())
-        }
+        },
 
-        Commands::Messages { chat_id } => {
-            match client.get_messages(&chat_id).await {
-                Ok(resp) => {
-                    display::print_success(format!("Found {} message(s)", resp.total));
-                    display::print_messages(&resp.data);
-                    Ok(())
-                }
-                Err(e) => Err(e),
-            }
-        }
+        Commands::Messages { chat_id } => match client.get_messages(&chat_id).await {
+            Ok(resp) => {
+                display::print_success(format!("Found {} message(s)", resp.pagination.total));
+                display::print_messages(&resp.data);
+                Ok(())
+            },
+            Err(e) => Err(e),
+        },
     }
 }
 
@@ -531,8 +529,14 @@ mod tests {
 
     #[test]
     fn test_parse_create_agent() {
-        let cli = Cli::try_parse_from(&["chat-cli", "create", "agent", "--name", "TestBot"]).unwrap();
-        if let Commands::Create(CreateCommands::Agent { name, description, owner_id }) = cli.command {
+        let cli =
+            Cli::try_parse_from(&["chat-cli", "create", "agent", "--name", "TestBot"]).unwrap();
+        if let Commands::Create(CreateCommands::Agent {
+            name,
+            description,
+            owner_id,
+        }) = cli.command
+        {
             assert_eq!(name, "TestBot");
             assert!(description.is_none());
             assert!(owner_id.is_none());
@@ -544,12 +548,23 @@ mod tests {
     #[test]
     fn test_parse_create_agent_full() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "create", "agent",
-            "--name", "TestBot",
-            "--description", "A test bot",
-            "--owner-id", "abc-123",
-        ]).unwrap();
-        if let Commands::Create(CreateCommands::Agent { name, description, owner_id }) = cli.command {
+            "chat-cli",
+            "create",
+            "agent",
+            "--name",
+            "TestBot",
+            "--description",
+            "A test bot",
+            "--owner-id",
+            "abc-123",
+        ])
+        .unwrap();
+        if let Commands::Create(CreateCommands::Agent {
+            name,
+            description,
+            owner_id,
+        }) = cli.command
+        {
             assert_eq!(name, "TestBot");
             assert_eq!(description, Some("A test bot".to_string()));
             assert_eq!(owner_id, Some("abc-123".to_string()));
@@ -561,10 +576,15 @@ mod tests {
     #[test]
     fn test_parse_create_owner() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "create", "owner",
-            "--name", "Alice",
-            "--email", "alice@example.com",
-        ]).unwrap();
+            "chat-cli",
+            "create",
+            "owner",
+            "--name",
+            "Alice",
+            "--email",
+            "alice@example.com",
+        ])
+        .unwrap();
         if let Commands::Create(CreateCommands::Owner { name, email }) = cli.command {
             assert_eq!(name, "Alice");
             assert_eq!(email, "alice@example.com");
@@ -576,11 +596,21 @@ mod tests {
     #[test]
     fn test_parse_create_chat() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "create", "chat",
-            "--agent-id", "agent-1",
-            "--owner-id", "owner-1",
-        ]).unwrap();
-        if let Commands::Create(CreateCommands::Chat { agent_id, owner_id, title }) = cli.command {
+            "chat-cli",
+            "create",
+            "chat",
+            "--agent-id",
+            "agent-1",
+            "--owner-id",
+            "owner-1",
+        ])
+        .unwrap();
+        if let Commands::Create(CreateCommands::Chat {
+            agent_id,
+            owner_id,
+            title,
+        }) = cli.command
+        {
             assert_eq!(agent_id, "agent-1");
             assert_eq!(owner_id, "owner-1");
             assert!(title.is_none());
@@ -592,11 +622,17 @@ mod tests {
     #[test]
     fn test_parse_create_chat_with_title() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "create", "chat",
-            "--agent-id", "agent-1",
-            "--owner-id", "owner-1",
-            "--title", "Help Chat",
-        ]).unwrap();
+            "chat-cli",
+            "create",
+            "chat",
+            "--agent-id",
+            "agent-1",
+            "--owner-id",
+            "owner-1",
+            "--title",
+            "Help Chat",
+        ])
+        .unwrap();
         if let Commands::Create(CreateCommands::Chat { title, .. }) = cli.command {
             assert_eq!(title, Some("Help Chat".to_string()));
         } else {
@@ -619,13 +655,19 @@ mod tests {
     #[test]
     fn test_parse_get_owner() {
         let cli = Cli::try_parse_from(&["chat-cli", "get", "owner", "abc-123"]).unwrap();
-        assert!(matches!(cli.command, Commands::Get(GetCommands::Owner { .. })));
+        assert!(matches!(
+            cli.command,
+            Commands::Get(GetCommands::Owner { .. })
+        ));
     }
 
     #[test]
     fn test_parse_get_chat() {
         let cli = Cli::try_parse_from(&["chat-cli", "get", "chat", "abc-123"]).unwrap();
-        assert!(matches!(cli.command, Commands::Get(GetCommands::Chat { .. })));
+        assert!(matches!(
+            cli.command,
+            Commands::Get(GetCommands::Chat { .. })
+        ));
     }
 
     // ─── Update subcommands ──────────────────────────────────────────────────
@@ -633,10 +675,9 @@ mod tests {
     #[test]
     fn test_parse_update_agent_name() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "update", "agent",
-            "--id", "abc-123",
-            "--name", "NewName",
-        ]).unwrap();
+            "chat-cli", "update", "agent", "--id", "abc-123", "--name", "NewName",
+        ])
+        .unwrap();
         if let Commands::Update(UpdateCommands::Agent { id, name, .. }) = cli.command {
             assert_eq!(id, "abc-123");
             assert_eq!(name, Some("NewName".to_string()));
@@ -648,10 +689,15 @@ mod tests {
     #[test]
     fn test_parse_update_chat() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "update", "chat",
-            "--id", "abc-123",
-            "--title", "Updated Title",
-        ]).unwrap();
+            "chat-cli",
+            "update",
+            "chat",
+            "--id",
+            "abc-123",
+            "--title",
+            "Updated Title",
+        ])
+        .unwrap();
         if let Commands::Update(UpdateCommands::Chat { id, title }) = cli.command {
             assert_eq!(id, "abc-123");
             assert_eq!(title, "Updated Title");
@@ -665,19 +711,28 @@ mod tests {
     #[test]
     fn test_parse_delete_agent() {
         let cli = Cli::try_parse_from(&["chat-cli", "delete", "agent", "abc-123"]).unwrap();
-        assert!(matches!(cli.command, Commands::Delete(DeleteCommands::Agent { .. })));
+        assert!(matches!(
+            cli.command,
+            Commands::Delete(DeleteCommands::Agent { .. })
+        ));
     }
 
     #[test]
     fn test_parse_delete_owner() {
         let cli = Cli::try_parse_from(&["chat-cli", "delete", "owner", "abc-123"]).unwrap();
-        assert!(matches!(cli.command, Commands::Delete(DeleteCommands::Owner { .. })));
+        assert!(matches!(
+            cli.command,
+            Commands::Delete(DeleteCommands::Owner { .. })
+        ));
     }
 
     #[test]
     fn test_parse_delete_chat() {
         let cli = Cli::try_parse_from(&["chat-cli", "delete", "chat", "abc-123"]).unwrap();
-        assert!(matches!(cli.command, Commands::Delete(DeleteCommands::Chat { .. })));
+        assert!(matches!(
+            cli.command,
+            Commands::Delete(DeleteCommands::Chat { .. })
+        ));
     }
 
     // ─── Send & Messages ────────────────────────────────────────────────────
@@ -685,13 +740,25 @@ mod tests {
     #[test]
     fn test_parse_send_message() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "send",
-            "--chat-id", "chat-1",
-            "--as-type", "agent",
-            "--sender-id", "agent-1",
-            "--text", "Hello!",
-        ]).unwrap();
-        if let Commands::Send { chat_id, as_type, sender_id, text } = cli.command {
+            "chat-cli",
+            "send",
+            "--chat-id",
+            "chat-1",
+            "--as-type",
+            "agent",
+            "--sender-id",
+            "agent-1",
+            "--text",
+            "Hello!",
+        ])
+        .unwrap();
+        if let Commands::Send {
+            chat_id,
+            as_type,
+            sender_id,
+            text,
+        } = cli.command
+        {
             assert_eq!(chat_id, "chat-1");
             assert_eq!(as_type, "agent");
             assert_eq!(sender_id, "agent-1");
@@ -749,12 +816,18 @@ mod tests {
     #[test]
     fn test_parse_send_empty_text() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "send",
-            "--chat-id", "chat-1",
-            "--as-type", "agent",
-            "--sender-id", "agent-1",
-            "--text", "",
-        ]).unwrap();
+            "chat-cli",
+            "send",
+            "--chat-id",
+            "chat-1",
+            "--as-type",
+            "agent",
+            "--sender-id",
+            "agent-1",
+            "--text",
+            "",
+        ])
+        .unwrap();
         if let Commands::Send { text, .. } = cli.command {
             assert_eq!(text, "");
         }
@@ -805,10 +878,15 @@ mod tests {
     #[test]
     fn test_parse_update_owner_email() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "update", "owner",
-            "--id", "owner-1",
-            "--email", "new@example.com",
-        ]).unwrap();
+            "chat-cli",
+            "update",
+            "owner",
+            "--id",
+            "owner-1",
+            "--email",
+            "new@example.com",
+        ])
+        .unwrap();
         if let Commands::Update(UpdateCommands::Owner { id, name, email }) = cli.command {
             assert_eq!(id, "owner-1");
             assert!(name.is_none());
@@ -819,14 +897,18 @@ mod tests {
     #[test]
     fn test_parse_update_agent_with_owner() {
         let cli = Cli::try_parse_from(&[
-            "chat-cli", "update", "agent",
-            "--id", "agent-1",
-            "--owner-id", "owner-1",
-        ]).unwrap();
+            "chat-cli",
+            "update",
+            "agent",
+            "--id",
+            "agent-1",
+            "--owner-id",
+            "owner-1",
+        ])
+        .unwrap();
         if let Commands::Update(UpdateCommands::Agent { id, owner_id, .. }) = cli.command {
             assert_eq!(id, "agent-1");
             assert_eq!(owner_id, Some("owner-1".to_string()));
         }
     }
 }
-

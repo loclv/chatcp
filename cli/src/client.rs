@@ -381,10 +381,7 @@ mod tests {
     #[tokio::test]
     async fn test_check_response_404_without_code() {
         let client = Client::new(make_config());
-        let resp = mock_response(
-            404,
-            r#"{"success":false,"error":"Not found","code":""}"#,
-        );
+        let resp = mock_response(404, r#"{"success":false,"error":"Not found","code":""}"#);
         let result = client.check_response(resp).await;
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -520,10 +517,10 @@ impl Client {
                     h.service.as_deref().unwrap_or("chat-app-backend"),
                     h.version.as_deref().unwrap_or("?"),
                 ));
-            }
+            },
             Err(e) => {
                 display::print_http_error(&e);
-            }
+            },
         }
     }
 
@@ -531,9 +528,9 @@ impl Client {
     pub async fn print_agents(&self) {
         match self.list_agents().await {
             Ok(resp) => {
-                display::print_success(format!("Found {} agent(s)", resp.total));
+                display::print_success(format!("Found {} agent(s)", resp.pagination.total));
                 display::print_agents(&resp.data);
-            }
+            },
             Err(e) => display::print_api_error(&e, None),
         }
     }
@@ -542,9 +539,9 @@ impl Client {
     pub async fn print_owners(&self) {
         match self.list_owners().await {
             Ok(resp) => {
-                display::print_success(format!("Found {} owner(s)", resp.total));
+                display::print_success(format!("Found {} owner(s)", resp.pagination.total));
                 display::print_owners(&resp.data);
-            }
+            },
             Err(e) => display::print_api_error(&e, None),
         }
     }
@@ -553,9 +550,9 @@ impl Client {
     pub async fn print_chats(&self) {
         match self.list_chats().await {
             Ok(resp) => {
-                display::print_success(format!("Found {} chat(s)", resp.total));
+                display::print_success(format!("Found {} chat(s)", resp.pagination.total));
                 display::print_chats(&resp.data);
-            }
+            },
             Err(e) => display::print_api_error(&e, None),
         }
     }
@@ -567,7 +564,7 @@ impl Client {
                 if let Some(chat) = resp.data {
                     display::print_chat_with_messages(&chat);
                 }
-            }
+            },
             Err(e) => display::print_api_error(&e, None),
         }
     }
@@ -589,7 +586,7 @@ impl Client {
                     display::print_success("Message sent!");
                     display::print_message(&msg);
                 }
-            }
+            },
             Err(e) => display::print_api_error(&e, None),
         }
     }

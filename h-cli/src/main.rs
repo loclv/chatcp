@@ -1,13 +1,13 @@
-use clap::Parser;
 use anyhow::Result;
+use clap::Parser;
 
 mod session;
 mod tui;
 
+use crate::session::Session;
+use crate::tui::{run_tui, TuiApp};
 use chat_cli::client::Client;
 use chat_cli::config::Config;
-use crate::session::Session;
-use crate::tui::{TuiApp, run_tui};
 
 /// Human Chat CLI — a beautiful TUI for chatting with your agents.
 #[derive(Parser, Debug)]
@@ -21,7 +21,7 @@ struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    
+
     // Load or initialize session
     let mut session = Session::load();
     if let Some(url) = args.api_url {

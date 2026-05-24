@@ -274,14 +274,20 @@ impl<T: Serialize> ApiResponse<T> {
     }
 }
 
+#[derive(Debug, Serialize)]
+pub struct PaginationMetadata {
+    pub limit: u32,
+    pub offset: u32,
+    pub total: usize,
+    pub has_more: bool,
+}
+
 /// Paginated list response.
 #[derive(Debug, Serialize)]
 pub struct PaginatedResponse<T: Serialize> {
     pub success: bool,
     pub data: Vec<T>,
-    pub total: usize,
-    pub limit: u32,
-    pub offset: u32,
+    pub pagination: PaginationMetadata,
 }
 
 /// Structured error response with a machine-readable error code.
@@ -439,13 +445,17 @@ mod tests {
         let items = vec![1, 2, 3];
         let resp = PaginatedResponse {
             success: true,
-            total: 3,
             data: items,
-            limit: 50,
-            offset: 0,
+            pagination: PaginationMetadata {
+                limit: 50,
+                offset: 0,
+                total: 3,
+                has_more: false,
+            },
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains(r#""success":true"#));
         assert!(json.contains(r#""total":3"#));
+        assert!(json.contains(r#""has_more":false"#));
     }
 }

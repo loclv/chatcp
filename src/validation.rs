@@ -18,10 +18,7 @@ pub trait Validator {
 pub fn validate_name(name: &str, field: &str) -> std::result::Result<(), AppError> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
-        return Err(AppError::Validation(format!(
-            "{} must not be empty",
-            field
-        )));
+        return Err(AppError::Validation(format!("{} must not be empty", field)));
     }
     if trimmed.len() > MAX_NAME_LENGTH {
         return Err(AppError::Validation(format!(
@@ -46,10 +43,7 @@ pub fn validate_name(name: &str, field: &str) -> std::result::Result<(), AppErro
 pub fn validate_email(email: &str, field: &str) -> std::result::Result<(), AppError> {
     let trimmed = email.trim();
     if trimmed.is_empty() {
-        return Err(AppError::Validation(format!(
-            "{} must not be empty",
-            field
-        )));
+        return Err(AppError::Validation(format!("{} must not be empty", field)));
     }
     if trimmed.len() > MAX_EMAIL_LENGTH {
         return Err(AppError::Validation(format!(
@@ -78,18 +72,21 @@ pub fn validate_email(email: &str, field: &str) -> std::result::Result<(), AppEr
 }
 
 /// Validate that a title/string is within max length bounds.
-pub fn validate_content(content: &str, field: &str, max_len: usize) -> std::result::Result<(), AppError> {
+pub fn validate_content(
+    content: &str,
+    field: &str,
+    max_len: usize,
+) -> std::result::Result<(), AppError> {
     let trimmed = content.trim();
     if trimmed.is_empty() {
-        return Err(AppError::Validation(format!(
-            "{} must not be empty",
-            field
-        )));
+        return Err(AppError::Validation(format!("{} must not be empty", field)));
     }
     if trimmed.len() > max_len {
         return Err(AppError::Validation(format!(
             "{} must be at most {} characters (got {})",
-            field, max_len, trimmed.len()
+            field,
+            max_len,
+            trimmed.len()
         )));
     }
     Ok(())
@@ -98,10 +95,7 @@ pub fn validate_content(content: &str, field: &str, max_len: usize) -> std::resu
 /// Validate that a string looks like a UUID v4.
 pub fn validate_uuid(id: &str, field: &str) -> std::result::Result<(), AppError> {
     if id.is_empty() {
-        return Err(AppError::Validation(format!(
-            "{} must not be empty",
-            field
-        )));
+        return Err(AppError::Validation(format!("{} must not be empty", field)));
     }
     // Quick check: UUID v4 format (36 chars, specific pattern)
     let bytes = id.as_bytes();
@@ -121,10 +115,7 @@ pub fn validate_uuid(id: &str, field: &str) -> std::result::Result<(), AppError>
     }
     // Check version nibble (character after third dash should be '4')
     if bytes[14] != b'4' {
-        return Err(AppError::Validation(format!(
-            "{} must be a UUID v4",
-            field
-        )));
+        return Err(AppError::Validation(format!("{} must be a UUID v4", field)));
     }
     // Check all hex characters
     for (i, &b) in bytes.iter().enumerate() {
@@ -218,13 +209,31 @@ impl Validator for UpdateChatRequest {
 impl Validator for SendMessageRequest {
     fn validate(&self) -> std::result::Result<(), AppError> {
         // Validate sender_type
-        if self.sender_type != SenderType::Agent.as_str() && self.sender_type != SenderType::Owner.as_str() {
+        if self.sender_type != SenderType::Agent.as_str()
+            && self.sender_type != SenderType::Owner.as_str()
+        {
             return Err(AppError::Validation(
                 "sender_type must be 'agent' or 'owner'".to_string(),
             ));
         }
         validate_uuid(&self.sender_id, "sender_id")?;
         validate_content(&self.content, "content", MAX_CONTENT_LENGTH)?;
+        Ok(())
+    }
+}
+
+impl Validator for QueryParams {
+    fn validate(&self) -> std::result::Result<(), AppError> {
+        if let Some(owner_id) = &self.owner_id {
+            if !owner_id.trim().is_empty() {
+                validate_uuid(owner_id, "owner_id")?;
+            }
+        }
+        if let Some(agent_id) = &self.agent_id {
+            if !agent_id.trim().is_empty() {
+                validate_uuid(agent_id, "agent_id")?;
+            }
+        }
         Ok(())
     }
 }
@@ -466,5 +475,41 @@ mod tests {
             content: "".to_string(),
         };
         assert!(req.validate().is_err());
+    }
+
+    // ─── QueryParams ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_query_params_validation_valid() {
+        let params = QueryParams {
+            limit: Some(10),
+            offset: Some(0),
+            owner_id: Some("550e8400-e29b-41d4-a716-446655440000".to_string()),
+            agent_id: Some("f47ac10b-58cc-4372-a567-0e02b2c3d479".to_string()),
+            ..Default::default()
+        };
+        assert!(params.validate().is_ok());
+    }
+
+    #[test]
+    fn test_query_params_validation_invalid_owner_id() {
+        let params = QueryParams {
+            owner_id: Some("invalid-uuid".to_string()),
+            ..Default::default()
+        };
+        let err = params.validate().unwrap_err();
+        assert_eq!(err.code(), "ERR_VALIDATION");
+        assert!(err.message().contains("owner_id"));
+    }
+
+    #[test]
+    fn test_query_params_validation_invalid_agent_id() {
+        let params = QueryParams {
+            agent_id: Some("invalid-uuid".to_string()),
+            ..Default::default()
+        };
+        let err = params.validate().unwrap_err();
+        assert_eq!(err.code(), "ERR_VALIDATION");
+        assert!(err.message().contains("agent_id"));
     }
 }

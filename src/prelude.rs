@@ -5,8 +5,8 @@
 
 pub use crate::models::{
     Agent, ApiResponse, AppError, Chat, ChatWithMessages, CreateAgentRequest, CreateChatRequest,
-    CreateOwnerRequest, Message, Owner, PaginatedResponse, QueryParams, SendMessageRequest,
-    SenderType, UpdateAgentRequest, UpdateChatRequest, UpdateOwnerRequest,
+    CreateOwnerRequest, Message, Owner, PaginatedResponse, PaginationMetadata, QueryParams,
+    SendMessageRequest, SenderType, UpdateAgentRequest, UpdateChatRequest, UpdateOwnerRequest,
 };
 pub use serde_json;
 
@@ -74,8 +74,13 @@ mod tests {
     #[test]
     fn test_reasonable_content_limit() {
         // MAX_CONTENT_LENGTH should accommodate long messages
-        assert!(MAX_CONTENT_LENGTH >= 1000, "content max should be at least 1000");
-        assert!(MAX_CONTENT_LENGTH <= 100_000, "content max should be at most 100k");
+        assert!(
+            MAX_CONTENT_LENGTH >= 1000,
+            "content max should be at least 1000"
+        );
+        assert!(
+            MAX_CONTENT_LENGTH <= 100_000,
+            "content max should be at most 100k"
+        );
     }
 }
-

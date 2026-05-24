@@ -14,13 +14,21 @@ pub struct ApiResponse<T> {
     pub error: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PaginationMetadata {
+    pub limit: u32,
+    pub offset: u32,
+    pub total: usize,
+    pub has_more: bool,
+}
+
 /// Paginated API response for list endpoints.
 #[derive(Debug, Deserialize)]
 pub struct PaginatedResponse<T> {
     #[allow(dead_code)]
     pub success: bool,
     pub data: Vec<T>,
-    pub total: usize,
+    pub pagination: PaginationMetadata,
 }
 
 /// Error response from the API (v0.2.0+ format with error code).
@@ -270,19 +278,19 @@ mod tests {
 
     #[test]
     fn test_paginated_response_deserialize() {
-        let json = r#"{"success": true, "data": [1, 2, 3], "total": 3}"#;
+        let json = r#"{"success": true, "data": [1, 2, 3], "pagination": {"limit": 50, "offset": 0, "total": 3, "has_more": false}}"#;
         let resp: PaginatedResponse<i32> = serde_json::from_str(json).unwrap();
         assert!(resp.success);
-        assert_eq!(resp.total, 3);
+        assert_eq!(resp.pagination.total, 3);
         assert_eq!(resp.data.len(), 3);
     }
 
     #[test]
     fn test_paginated_response_empty() {
-        let json = r#"{"success": true, "data": [], "total": 0}"#;
+        let json = r#"{"success": true, "data": [], "pagination": {"limit": 50, "offset": 0, "total": 0, "has_more": false}}"#;
         let resp: PaginatedResponse<i32> = serde_json::from_str(json).unwrap();
         assert!(resp.success);
-        assert_eq!(resp.total, 0);
+        assert_eq!(resp.pagination.total, 0);
         assert!(resp.data.is_empty());
     }
 
@@ -290,8 +298,7 @@ mod tests {
 
     #[test]
     fn test_error_response_with_code() {
-        let json =
-            r#"{"success": false, "error": "Not found", "code": "ERR_NOT_FOUND"}"#;
+        let json = r#"{"success": false, "error": "Not found", "code": "ERR_NOT_FOUND"}"#;
         let err: ErrorResponse = serde_json::from_str(json).unwrap();
         assert!(!err.success);
         assert_eq!(err.error, "Not found");
@@ -327,4 +334,3 @@ mod tests {
         assert!(health.version.is_none());
     }
 }
-

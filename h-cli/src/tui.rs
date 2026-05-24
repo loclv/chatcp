@@ -12,9 +12,9 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
+use crate::session::Session;
 use chat_cli::client::Client;
 use chat_cli::models::{Agent, Chat, Message, Owner};
-use crate::session::Session;
 
 /// The different screens in the TUI.
 #[derive(Debug, Clone, PartialEq)]
@@ -71,14 +71,22 @@ impl<'a> TuiApp<'a> {
 
     pub async fn init(&mut self) -> Result<()> {
         // Fetch owners to start with
-        let resp = self.client.list_owners().await.map_err(|e| anyhow::anyhow!(e))?;
+        let resp = self
+            .client
+            .list_owners()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         self.owners = resp.data;
         if !self.owners.is_empty() {
             self.owners_state.select(Some(0));
         }
 
         // Fetch agents too (needed for names)
-        let resp = self.client.list_agents().await.map_err(|e| anyhow::anyhow!(e))?;
+        let resp = self
+            .client
+            .list_agents()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         self.agents = resp.data;
 
         // If we have an owner_id in session, skip SelectOwner
@@ -98,10 +106,18 @@ impl<'a> TuiApp<'a> {
             None => return Ok(()),
         };
 
-        let resp = self.client.list_chats().await.map_err(|e| anyhow::anyhow!(e))?;
+        let resp = self
+            .client
+            .list_chats()
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         // Filter chats by owner_id (Backend should ideally do this, but we'll do it here for now)
-        self.chats = resp.data.into_iter().filter(|c| c.owner_id == *owner_id).collect();
-        
+        self.chats = resp
+            .data
+            .into_iter()
+            .filter(|c| c.owner_id == *owner_id)
+            .collect();
+
         if self.chats_state.selected().is_none() && !self.chats.is_empty() {
             self.chats_state.select(Some(0));
         }
@@ -110,7 +126,11 @@ impl<'a> TuiApp<'a> {
     }
 
     pub async fn refresh_messages(&mut self, chat_id: &str) -> Result<()> {
-        let resp = self.client.get_chat(chat_id).await.map_err(|e| anyhow::anyhow!(e))?;
+        let resp = self
+            .client
+            .get_chat(chat_id)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
         if let Some(chat_with_msgs) = resp.data {
             self.messages = chat_with_msgs.messages;
         }
@@ -127,9 +147,12 @@ impl<'a> TuiApp<'a> {
             let owner_id = self.session.owner_id.as_ref().unwrap();
             let chat_id = chat_id.clone();
             let text = self.input.clone();
-            
-            self.client.send_message(&chat_id, "owner", owner_id, &text).await.map_err(|e| anyhow::anyhow!(e))?;
-            
+
+            self.client
+                .send_message(&chat_id, "owner", owner_id, &text)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+
             self.input.clear();
             self.cursor_position = 0;
             self.refresh_messages(&chat_id).await?;
@@ -165,11 +188,11 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
                                         } else {
                                             i - 1
                                         }
-                                    }
+                                    },
                                     None => 0,
                                 };
                                 app.owners_state.select(Some(i));
-                            }
+                            },
                             KeyCode::Down => {
                                 let i = match app.owners_state.selected() {
                                     Some(i) => {
@@ -178,11 +201,11 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
                                         } else {
                                             i + 1
                                         }
-                                    }
+                                    },
                                     None => 0,
                                 };
                                 app.owners_state.select(Some(i));
-                            }
+                            },
                             KeyCode::Enter => {
                                 if let Some(idx) = app.owners_state.selected() {
                                     let owner = &app.owners[idx];
@@ -191,14 +214,14 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
                                     app.screen = Screen::ChatList;
                                     rt.block_on(app.refresh_chats())?;
                                 }
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         },
                         Screen::ChatList => match key.code {
                             KeyCode::Char('q') => app.should_quit = true,
                             KeyCode::Char('l') => {
                                 app.screen = Screen::SelectOwner;
-                            }
+                            },
                             KeyCode::Up => {
                                 let i = match app.chats_state.selected() {
                                     Some(i) => {
@@ -207,11 +230,11 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
                                         } else {
                                             i - 1
                                         }
-                                    }
+                                    },
                                     None => 0,
                                 };
                                 app.chats_state.select(Some(i));
-                            }
+                            },
                             KeyCode::Down => {
                                 let i = match app.chats_state.selected() {
                                     Some(i) => {
@@ -220,11 +243,11 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
                                         } else {
                                             i + 1
                                         }
-                                    }
+                                    },
                                     None => 0,
                                 };
                                 app.chats_state.select(Some(i));
-                            }
+                            },
                             KeyCode::Enter => {
                                 if let Some(idx) = app.chats_state.selected() {
                                     let chat = &app.chats[idx];
@@ -232,25 +255,25 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
                                     app.screen = Screen::ChatRoom(chat_id.clone());
                                     rt.block_on(app.refresh_messages(&chat_id))?;
                                 }
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         },
                         Screen::ChatRoom(ref _chat_id) => match key.code {
                             KeyCode::Esc => {
                                 app.screen = Screen::ChatList;
-                            }
+                            },
                             KeyCode::Enter => {
                                 rt.block_on(app.send_message())?;
-                            }
+                            },
                             KeyCode::Char(c) => {
                                 app.input.push(c);
                                 app.cursor_position += 1;
-                            }
+                            },
                             KeyCode::Backspace if app.cursor_position > 0 => {
                                 app.input.pop();
                                 app.cursor_position -= 1;
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         },
                     }
                 }
@@ -262,12 +285,12 @@ pub fn run_tui(mut app: TuiApp) -> Result<()> {
             match &app.screen {
                 Screen::ChatList => {
                     rt.block_on(app.refresh_chats()).ok();
-                }
+                },
                 Screen::ChatRoom(chat_id) => {
                     let id = chat_id.clone();
                     rt.block_on(app.refresh_messages(&id)).ok();
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -314,14 +337,23 @@ fn ui(f: &mut Frame, app: &mut TuiApp) {
                 .highlight_symbol(">> ");
 
             f.render_stateful_widget(list, chunks[1], &mut app.owners_state);
-        }
+        },
         Screen::ChatList => {
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Min(0),
+                    Constraint::Length(3),
+                ])
                 .split(size);
 
-            let owner_name = app.owners.iter().find(|o| Some(o.id.clone()) == app.session.owner_id).map(|o| o.name.as_str()).unwrap_or("Unknown");
+            let owner_name = app
+                .owners
+                .iter()
+                .find(|o| Some(o.id.clone()) == app.session.owner_id)
+                .map(|o| o.name.as_str())
+                .unwrap_or("Unknown");
 
             let header = Paragraph::new(format!("Logged in as: {}", owner_name))
                 .block(Block::default().borders(Borders::ALL).title("Chats"))
@@ -333,14 +365,23 @@ fn ui(f: &mut Frame, app: &mut TuiApp) {
                 .chats
                 .iter()
                 .map(|c| {
-                    let agent_name = app.agents.iter().find(|a| a.id == c.agent_id).map(|a| a.name.as_str()).unwrap_or("Agent");
+                    let agent_name = app
+                        .agents
+                        .iter()
+                        .find(|a| a.id == c.agent_id)
+                        .map(|a| a.name.as_str())
+                        .unwrap_or("Agent");
                     ListItem::new(format!("{} with {}", c.title, agent_name))
                         .style(Style::default().fg(Color::White))
                 })
                 .collect();
 
             let list = List::new(items)
-                .block(Block::default().borders(Borders::ALL).title("Select a conversation"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Select a conversation"),
+                )
                 .highlight_style(Style::default().bg(Color::Green).fg(Color::White).bold())
                 .highlight_symbol("💬 ");
 
@@ -350,7 +391,7 @@ fn ui(f: &mut Frame, app: &mut TuiApp) {
                 .alignment(Alignment::Center)
                 .style(Style::default().fg(Color::DarkGray));
             f.render_widget(footer, chunks[2]);
-        }
+        },
         Screen::ChatRoom(chat_id) => {
             let chat = app.chats.iter().find(|c| c.id == *chat_id);
             let title = chat.map(|c| c.title.as_str()).unwrap_or("Chat");
@@ -377,7 +418,12 @@ fn ui(f: &mut Frame, app: &mut TuiApp) {
                     let sender = if m.sender_type == "owner" {
                         "Me".cyan().bold()
                     } else {
-                        let name = app.agents.iter().find(|a| a.id == m.sender_id).map(|a| a.name.as_str()).unwrap_or("Agent");
+                        let name = app
+                            .agents
+                            .iter()
+                            .find(|a| a.id == m.sender_id)
+                            .map(|a| a.name.as_str())
+                            .unwrap_or("Agent");
                         name.yellow().bold()
                     };
                     ListItem::new(vec![
@@ -394,8 +440,12 @@ fn ui(f: &mut Frame, app: &mut TuiApp) {
 
             let input = Paragraph::new(app.input.as_str())
                 .style(Style::default().fg(Color::White))
-                .block(Block::default().borders(Borders::ALL).title("Your message (Press Enter to send, Esc to go back)"));
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title("Your message (Press Enter to send, Esc to go back)"),
+                );
             f.render_widget(input, chunks[2]);
-        }
+        },
     }
 }

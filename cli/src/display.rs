@@ -53,13 +53,7 @@ pub fn print_agent(agent: &Agent) {
     print_field("ID", &agent.id);
     print_field("Name", &agent.name);
     print_field("Description", &agent.description);
-    print_field(
-        "Owner",
-        agent
-            .owner_id
-            .as_deref()
-            .unwrap_or("(unassigned)"),
-    );
+    print_field("Owner", agent.owner_id.as_deref().unwrap_or("(unassigned)"));
     print_field("Created", &agent.created_at);
     print_field("Updated", &agent.updated_at);
     print_empty();
@@ -74,13 +68,7 @@ pub fn print_agents(agents: &[Agent]) {
 
     let mut table = Table::new();
     table.set_format(*format::consts::FORMAT_BOX_CHARS);
-    table.set_titles(row![
-        "ID",
-        "Name",
-        "Description",
-        "Owner ID",
-        "Created"
-    ]);
+    table.set_titles(row!["ID", "Name", "Description", "Owner ID", "Created"]);
 
     for agent in agents {
         let short_id = &agent.id[..8];
@@ -257,7 +245,9 @@ pub fn print_api_error(error: &str, code: Option<&str>) {
 /// Display an HTTP-level error (connection refused, timeout, etc.).
 pub fn print_http_error(error: &str) {
     print_error(format!("Connection error: {}", error));
-    print_info("Make sure the backend is running. Use --api-url or set CHAT_API_URL to change the URL.");
+    print_info(
+        "Make sure the backend is running. Use --api-url or set CHAT_API_URL to change the URL.",
+    );
 }
 
 #[cfg(test)]
@@ -306,25 +296,39 @@ mod tests {
     }
 
     #[test]
-    fn test_print_success() { check_no_panic(|| print_success("done")); }
+    fn test_print_success() {
+        check_no_panic(|| print_success("done"));
+    }
 
     #[test]
-    fn test_print_info() { check_no_panic(|| print_info("info")); }
+    fn test_print_info() {
+        check_no_panic(|| print_info("info"));
+    }
 
     #[test]
-    fn test_print_error() { check_no_panic(|| print_error("err")); }
+    fn test_print_error() {
+        check_no_panic(|| print_error("err"));
+    }
 
     #[test]
-    fn test_print_warning() { check_no_panic(|| print_warning("warn")); }
+    fn test_print_warning() {
+        check_no_panic(|| print_warning("warn"));
+    }
 
     #[test]
-    fn test_print_header() { check_no_panic(|| print_header("Title")); }
+    fn test_print_header() {
+        check_no_panic(|| print_header("Title"));
+    }
 
     #[test]
-    fn test_print_field() { check_no_panic(|| print_field("key", "value")); }
+    fn test_print_field() {
+        check_no_panic(|| print_field("key", "value"));
+    }
 
     #[test]
-    fn test_print_empty() { check_no_panic(print_empty); }
+    fn test_print_empty() {
+        check_no_panic(print_empty);
+    }
 
     // ─── Agent display smoke tests ─────────────────────────────────────────────
 
@@ -456,14 +460,16 @@ mod tests {
             owner_id: "owner-1".into(),
             created_at: "2025-01-01".into(),
             updated_at: "2025-01-01".into(),
-            messages: (0..msg_count).map(|i| Message {
-                id: format!("msg-{}", i),
-                chat_id: "chat-1".into(),
-                sender_type: if i % 2 == 0 { "agent" } else { "owner" }.into(),
-                sender_id: "sender-1".into(),
-                content: format!("Message {}", i),
-                created_at: "2025-01-01".into(),
-            }).collect(),
+            messages: (0..msg_count)
+                .map(|i| Message {
+                    id: format!("msg-{}", i),
+                    chat_id: "chat-1".into(),
+                    sender_type: if i % 2 == 0 { "agent" } else { "owner" }.into(),
+                    sender_id: "sender-1".into(),
+                    content: format!("Message {}", i),
+                    created_at: "2025-01-01".into(),
+                })
+                .collect(),
         }
     }
 
@@ -515,7 +521,9 @@ mod tests {
     fn sample_long_title_chat() -> Chat {
         Chat {
             id: "550e8400-e29b-41d4-a716-446655440000".into(),
-            title: "A very long chat title that definitely exceeds twenty five characters for testing".into(),
+            title:
+                "A very long chat title that definitely exceeds twenty five characters for testing"
+                    .into(),
             agent_id: "f47ac10b-58cc-4372-a567-0e02b2c3d479".into(),
             owner_id: "a1b2c3d4-e5f6-4789-abcd-ef0123456789".into(),
             created_at: "2025-01-01".into(),
@@ -545,15 +553,19 @@ mod tests {
 
     #[test]
     fn test_print_messages_large_batch() {
-        let msgs: Vec<Message> = (0..20).map(|i| Message {
-            id: format!("msg-{}", i),
-            chat_id: "chat-1".into(),
-            sender_type: if i % 2 == 0 { "agent" } else { "owner" }.into(),
-            sender_id: "sender-1".into(),
-            content: format!("Long message content number {} that goes on for a while to test rendering", i),
-            created_at: "2025-01-01".into(),
-        }).collect();
+        let msgs: Vec<Message> = (0..20)
+            .map(|i| Message {
+                id: format!("msg-{}", i),
+                chat_id: "chat-1".into(),
+                sender_type: if i % 2 == 0 { "agent" } else { "owner" }.into(),
+                sender_id: "sender-1".into(),
+                content: format!(
+                    "Long message content number {} that goes on for a while to test rendering",
+                    i
+                ),
+                created_at: "2025-01-01".into(),
+            })
+            .collect();
         check_no_panic(|| print_messages(&msgs));
     }
 }
-

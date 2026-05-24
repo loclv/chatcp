@@ -1,6 +1,6 @@
+use uuid::Uuid;
 use wasm_bindgen::JsValue;
 use worker::*;
-use uuid::Uuid;
 
 use crate::prelude::*;
 
@@ -52,7 +52,12 @@ mod tests {
             if i == 8 || i == 13 || i == 18 || i == 23 {
                 continue; // dashes
             }
-            assert!(b.is_ascii_hexdigit(), "Non-hex char '{}' at pos {}", b as char, i);
+            assert!(
+                b.is_ascii_hexdigit(),
+                "Non-hex char '{}' at pos {}",
+                b as char,
+                i
+            );
         }
     }
 
@@ -96,12 +101,12 @@ pub async fn create_agent(d1: &D1Database, req: &CreateAgentRequest) -> Result<R
             Some(agent) => {
                 let resp = ApiResponse::success(agent);
                 Response::from_json(&resp).map(|r| r.with_status(201))
-            }
-            None => AppError::Internal("Failed to retrieve created agent".to_string()).into_response(),
+            },
+            None => {
+                AppError::Internal("Failed to retrieve created agent".to_string()).into_response()
+            },
         },
-        Err(e) => {
-            AppError::Database(format!("Failed to create agent: {}", e)).into_response()
-        }
+        Err(e) => AppError::Database(format!("Failed to create agent: {}", e)).into_response(),
     }
 }
 
@@ -117,7 +122,11 @@ pub async fn list_agents(d1: &D1Database, params: &QueryParams) -> Result<Respon
     }
 
     if let Some(after) = &params.created_after {
-        let prefix = if query.contains("WHERE") { " AND " } else { " WHERE " };
+        let prefix = if query.contains("WHERE") {
+            " AND "
+        } else {
+            " WHERE "
+        };
         query.push_str(prefix);
         query.push_str("created_at >= ?");
         count_query.push_str(prefix);
@@ -126,7 +135,11 @@ pub async fn list_agents(d1: &D1Database, params: &QueryParams) -> Result<Respon
     }
 
     if let Some(before) = &params.created_before {
-        let prefix = if query.contains("WHERE") { " AND " } else { " WHERE " };
+        let prefix = if query.contains("WHERE") {
+            " AND "
+        } else {
+            " WHERE "
+        };
         query.push_str(prefix);
         query.push_str("created_at <= ?");
         count_query.push_str(prefix);
@@ -142,7 +155,11 @@ pub async fn list_agents(d1: &D1Database, params: &QueryParams) -> Result<Respon
         "updated_at" => "updated_at",
         _ => "created_at",
     };
-    let safe_sort_order = if sort_order.to_uppercase() == "ASC" { "ASC" } else { "DESC" };
+    let safe_sort_order = if sort_order.to_uppercase() == "ASC" {
+        "ASC"
+    } else {
+        "DESC"
+    };
 
     query.push_str(&format!(" ORDER BY {} {}", safe_sort_by, safe_sort_order));
     query.push_str(" LIMIT ? OFFSET ?");
@@ -160,26 +177,34 @@ pub async fn list_agents(d1: &D1Database, params: &QueryParams) -> Result<Respon
     match results {
         Ok(agents) => {
             let data: Vec<Agent> = agents.results()?;
+            let has_more = offset as usize + data.len() < total_count;
             let resp = PaginatedResponse {
                 success: true,
                 data,
-                total: total_count,
-                limit,
-                offset,
+                pagination: PaginationMetadata {
+                    limit,
+                    offset,
+                    total: total_count,
+                    has_more,
+                },
             };
             Response::from_json(&resp)
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to list agents: {}", e)).into_response(),
     }
 }
 
 async fn get_total_count(d1: &D1Database, query: &str, args: &[JsValue]) -> Result<usize> {
-    let result = d1.prepare(query).bind(args)?.first::<serde_json::Value>(None).await?;
+    let result = d1
+        .prepare(query)
+        .bind(args)?
+        .first::<serde_json::Value>(None)
+        .await?;
     match result {
         Some(row) => {
             let count = row.get("total").and_then(|v| v.as_u64()).unwrap_or(0);
             Ok(count as usize)
-        }
+        },
         None => Ok(0),
     }
 }
@@ -189,7 +214,7 @@ pub async fn get_agent(d1: &D1Database, id: &str) -> Result<Response> {
         Ok(Some(agent)) => {
             let resp = ApiResponse::success(agent);
             Response::from_json(&resp)
-        }
+        },
         Ok(None) => AppError::NotFound(format!("Agent '{}' not found", id)).into_response(),
         Err(e) => AppError::Database(e.to_string()).into_response(),
     }
@@ -209,7 +234,11 @@ pub async fn get_agent_raw(d1: &D1Database, id: &str) -> Result<Option<Agent>> {
     get_agent_by_id(d1, id).await
 }
 
-pub async fn get_agent_messages(d1: &D1Database, id: &str, params: &QueryParams) -> Result<Response> {
+pub async fn get_agent_messages(
+    d1: &D1Database,
+    id: &str,
+    params: &QueryParams,
+) -> Result<Response> {
     let query = "SELECT * FROM messages WHERE sender_id = ? AND sender_type = 'agent' ORDER BY created_at DESC LIMIT ? OFFSET ?";
     let limit = params.limit();
     let offset = params.offset();
@@ -230,16 +259,22 @@ pub async fn get_agent_messages(d1: &D1Database, id: &str, params: &QueryParams)
     match results {
         Ok(messages) => {
             let data: Vec<Message> = messages.results()?;
+            let has_more = offset as usize + data.len() < total_count;
             let resp = PaginatedResponse {
                 success: true,
                 data,
-                total: total_count,
-                limit,
-                offset,
+                pagination: PaginationMetadata {
+                    limit,
+                    offset,
+                    total: total_count,
+                    has_more,
+                },
             };
             Response::from_json(&resp)
-        }
-        Err(e) => AppError::Database(format!("Failed to get agent messages: {}", e)).into_response(),
+        },
+        Err(e) => {
+            AppError::Database(format!("Failed to get agent messages: {}", e)).into_response()
+        },
     }
 }
 
@@ -288,7 +323,7 @@ pub async fn delete_agent(d1: &D1Database, id: &str) -> Result<Response> {
             } else {
                 AppError::NotFound(format!("Agent '{}' not found", id)).into_response()
             }
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to delete agent: {}", e)).into_response(),
     }
 }
@@ -302,7 +337,11 @@ pub async fn create_owner(d1: &D1Database, req: &CreateOwnerRequest) -> Result<R
         .prepare(
             "INSERT INTO owners (id, name, email, created_at) VALUES (?, ?, ?, datetime('now'))",
         )
-        .bind(&[id.as_str().into(), req.name.as_str().into(), req.email.as_str().into()])?
+        .bind(&[
+            id.as_str().into(),
+            req.name.as_str().into(),
+            req.email.as_str().into(),
+        ])?
         .run()
         .await;
 
@@ -311,8 +350,10 @@ pub async fn create_owner(d1: &D1Database, req: &CreateOwnerRequest) -> Result<R
             Some(owner) => {
                 let resp = ApiResponse::success(owner);
                 Response::from_json(&resp).map(|r| r.with_status(201))
-            }
-            None => AppError::Internal("Failed to retrieve created owner".to_string()).into_response(),
+            },
+            None => {
+                AppError::Internal("Failed to retrieve created owner".to_string()).into_response()
+            },
         },
         Err(e) => {
             let msg = format!("{}", e);
@@ -321,7 +362,7 @@ pub async fn create_owner(d1: &D1Database, req: &CreateOwnerRequest) -> Result<R
                     .into_response();
             }
             AppError::Database(format!("Failed to create owner: {}", e)).into_response()
-        }
+        },
     }
 }
 
@@ -330,21 +371,29 @@ pub async fn list_owners(d1: &D1Database, params: &QueryParams) -> Result<Respon
     let limit = params.limit();
     let offset = params.offset();
 
-    let results = d1.prepare(query).bind(&[limit.into(), offset.into()])?.all().await;
+    let results = d1
+        .prepare(query)
+        .bind(&[limit.into(), offset.into()])?
+        .all()
+        .await;
     let total_count = get_total_count(d1, "SELECT COUNT(*) as total FROM owners", &[]).await?;
 
     match results {
         Ok(owners) => {
             let data: Vec<Owner> = owners.results()?;
+            let has_more = offset as usize + data.len() < total_count;
             let resp = PaginatedResponse {
                 success: true,
                 data,
-                total: total_count,
-                limit,
-                offset,
+                pagination: PaginationMetadata {
+                    limit,
+                    offset,
+                    total: total_count,
+                    has_more,
+                },
             };
             Response::from_json(&resp)
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to list owners: {}", e)).into_response(),
     }
 }
@@ -354,7 +403,7 @@ pub async fn get_owner(d1: &D1Database, id: &str) -> Result<Response> {
         Ok(Some(owner)) => {
             let resp = ApiResponse::success(owner);
             Response::from_json(&resp)
-        }
+        },
         Ok(None) => AppError::NotFound(format!("Owner '{}' not found", id)).into_response(),
         Err(e) => AppError::Database(e.to_string()).into_response(),
     }
@@ -406,7 +455,7 @@ pub async fn delete_owner(d1: &D1Database, id: &str) -> Result<Response> {
             } else {
                 AppError::NotFound(format!("Owner '{}' not found", id)).into_response()
             }
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to delete owner: {}", e)).into_response(),
     }
 }
@@ -436,8 +485,10 @@ pub async fn create_chat(d1: &D1Database, req: &CreateChatRequest) -> Result<Res
             Some(chat) => {
                 let resp = ApiResponse::success(chat);
                 Response::from_json(&resp).map(|r| r.with_status(201))
-            }
-            None => AppError::Internal("Failed to retrieve created chat".to_string()).into_response(),
+            },
+            None => {
+                AppError::Internal("Failed to retrieve created chat".to_string()).into_response()
+            },
         },
         Err(e) => AppError::Database(format!("Failed to create chat: {}", e)).into_response(),
     }
@@ -479,15 +530,19 @@ pub async fn list_chats(d1: &D1Database, params: &QueryParams) -> Result<Respons
     match results {
         Ok(chats) => {
             let data: Vec<Chat> = chats.results()?;
+            let has_more = offset as usize + data.len() < total_count;
             let resp = PaginatedResponse {
                 success: true,
                 data,
-                total: total_count,
-                limit,
-                offset,
+                pagination: PaginationMetadata {
+                    limit,
+                    offset,
+                    total: total_count,
+                    has_more,
+                },
             };
             Response::from_json(&resp)
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to list chats: {}", e)).into_response(),
     }
 }
@@ -522,7 +577,7 @@ pub async fn get_chat_with_messages(d1: &D1Database, id: &str) -> Result<Respons
             };
             let resp = ApiResponse::success(chat_with_msgs);
             Response::from_json(&resp)
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to get messages: {}", e)).into_response(),
     }
 }
@@ -563,14 +618,18 @@ pub async fn delete_chat(d1: &D1Database, id: &str) -> Result<Response> {
             } else {
                 AppError::NotFound(format!("Chat '{}' not found", id)).into_response()
             }
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to delete chat: {}", e)).into_response(),
     }
 }
 
 // ─── Messages ────────────────────────────────────────────────────────────────
 
-pub async fn send_message(d1: &D1Database, chat_id: &str, req: &SendMessageRequest) -> Result<Response> {
+pub async fn send_message(
+    d1: &D1Database,
+    chat_id: &str,
+    req: &SendMessageRequest,
+) -> Result<Response> {
     // Verify chat exists
     if get_chat_by_id(d1, chat_id).await?.is_none() {
         return AppError::NotFound(format!("Chat '{}' not found", chat_id)).into_response();
@@ -612,15 +671,20 @@ pub async fn send_message(d1: &D1Database, chat_id: &str, req: &SendMessageReque
                 Some(m) => {
                     let resp = ApiResponse::success(m);
                     Response::from_json(&resp).map(|r| r.with_status(201))
-                }
-                None => AppError::Internal("Failed to retrieve created message".to_string()).into_response(),
+                },
+                None => AppError::Internal("Failed to retrieve created message".to_string())
+                    .into_response(),
             }
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to send message: {}", e)).into_response(),
     }
 }
 
-pub async fn get_messages(d1: &D1Database, chat_id: &str, params: &QueryParams) -> Result<Response> {
+pub async fn get_messages(
+    d1: &D1Database,
+    chat_id: &str,
+    params: &QueryParams,
+) -> Result<Response> {
     // Verify chat exists
     if get_chat_by_id(d1, chat_id).await?.is_none() {
         return AppError::NotFound(format!("Chat '{}' not found", chat_id)).into_response();
@@ -638,7 +702,7 @@ pub async fn get_messages(d1: &D1Database, chat_id: &str, params: &QueryParams) 
     }
 
     query.push_str(" ORDER BY created_at ASC LIMIT ? OFFSET ?");
-    
+
     let limit = params.limit();
     let offset = params.offset();
 
@@ -652,15 +716,19 @@ pub async fn get_messages(d1: &D1Database, chat_id: &str, params: &QueryParams) 
     match results {
         Ok(messages) => {
             let data: Vec<Message> = messages.results()?;
+            let has_more = offset as usize + data.len() < total_count;
             let resp = PaginatedResponse {
                 success: true,
                 data,
-                total: total_count,
-                limit,
-                offset,
+                pagination: PaginationMetadata {
+                    limit,
+                    offset,
+                    total: total_count,
+                    has_more,
+                },
             };
             Response::from_json(&resp)
-        }
+        },
         Err(e) => AppError::Database(format!("Failed to get messages: {}", e)).into_response(),
     }
 }

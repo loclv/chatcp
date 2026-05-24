@@ -51,7 +51,7 @@ pub(crate) fn parse_command(input: &str) -> Option<ParsedCommand> {
         "/select" | "/s" => {
             let num = arg.as_ref().and_then(|s| s.parse::<usize>().ok());
             Some(ParsedCommand::Select(num))
-        }
+        },
         "/new" | "/n" => Some(ParsedCommand::New),
         "/refresh" | "/r" => Some(ParsedCommand::Refresh),
         "/agents" | "/a" => Some(ParsedCommand::Agents),
@@ -89,32 +89,78 @@ pub async fn run(client: &Client) {
     refresh_chats(client, &mut state).await;
 
     println!();
-    println!("{}", "╔══════════════════════════════════════════════════════════╗".bright_blue());
-    println!("{}", "║           Chat App CLI — Interactive Mode              ║".bright_blue().bold());
-    println!("{}", "╠══════════════════════════════════════════════════════════╣".bright_blue());
-    println!("{}", "║  Commands:                                             ║".bright_blue());
-    println!("{}", "║  /list         — List all chats                        ║".bright_blue());
-    println!("{}", "║  /select <n>   — Select chat by number                 ║".bright_blue());
-    println!("{}", "║  /new          — Create a new chat                     ║".bright_blue());
-    println!("{}", "║  /refresh      — Refresh chat list                     ║".bright_blue());
-    println!("{}", "║  /agents       — List agents                           ║".bright_blue());
-    println!("{}", "║  /owners       — List owners                           ║".bright_blue());
-    println!("{}", "║  /help         — Show this help                        ║".bright_blue());
-    println!("{}", "║  /quit         — Exit interactive mode                 ║".bright_blue());
-    println!("{}", "║                                                         ║".bright_blue());
-    println!("{}", "║  Type any text to send it as a message in the          ║".bright_blue());
-    println!("{}", "║  currently selected chat.                              ║".bright_blue());
-    println!("{}", "╚══════════════════════════════════════════════════════════╝".bright_blue());
+    println!(
+        "{}",
+        "╔══════════════════════════════════════════════════════════╗".bright_blue()
+    );
+    println!(
+        "{}",
+        "║           Chat App CLI — Interactive Mode              ║"
+            .bright_blue()
+            .bold()
+    );
+    println!(
+        "{}",
+        "╠══════════════════════════════════════════════════════════╣".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  Commands:                                             ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /list         — List all chats                        ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /select <n>   — Select chat by number                 ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /new          — Create a new chat                     ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /refresh      — Refresh chat list                     ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /agents       — List agents                           ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /owners       — List owners                           ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /help         — Show this help                        ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  /quit         — Exit interactive mode                 ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║                                                         ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  Type any text to send it as a message in the          ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "║  currently selected chat.                              ║".bright_blue()
+    );
+    println!(
+        "{}",
+        "╚══════════════════════════════════════════════════════════╝".bright_blue()
+    );
     println!();
 
     loop {
         // Show current chat context in prompt
         let prompt = match &state.current_chat {
-            Some(chat) => format!(
-                "{} {}> ",
-                "\u{1f4ac}",
-                chat.title.as_str().green().bold()
-            ),
+            Some(chat) => format!("{} {}> ", "\u{1f4ac}", chat.title.as_str().green().bold()),
             None => format!("{}> ", "\u{1f4cb}"),
         };
 
@@ -141,7 +187,9 @@ pub async fn run(client: &Client) {
             // Send as message in current chat
             send_as_message(client, &state, &input).await;
         } else {
-            display::print_warning("No chat selected. Use /list then /select <n> to choose a chat.");
+            display::print_warning(
+                "No chat selected. Use /list then /select <n> to choose a chat.",
+            );
         }
     }
 
@@ -153,10 +201,10 @@ async fn handle_command(client: &Client, state: &mut ReplState, cmd: ParsedComma
     match cmd {
         ParsedCommand::Help => {
             print_help();
-        }
+        },
         ParsedCommand::List => {
             refresh_chats(client, state).await;
-        }
+        },
         ParsedCommand::Select(num) => {
             if let Some(n) = num {
                 if n > 0 && n <= state.chats.len() {
@@ -172,30 +220,30 @@ async fn handle_command(client: &Client, state: &mut ReplState, cmd: ParsedComma
                 match &state.current_chat {
                     Some(chat) => {
                         display::print_success(format!("Currently in chat: {}", chat.title));
-                    }
+                    },
                     None => {
                         display::print_warning("No chat selected. Use /list then /select <n>");
-                    }
+                    },
                 }
             }
-        }
+        },
         ParsedCommand::New => {
             create_new_chat(client, state).await;
-        }
+        },
         ParsedCommand::Refresh => {
             refresh_chats(client, state).await;
-        }
+        },
         ParsedCommand::Agents => {
             client.print_agents().await;
-        }
+        },
         ParsedCommand::Owners => {
             client.print_owners().await;
-        }
+        },
         ParsedCommand::Unknown(other) => {
             display::print_error(format!("Unknown command: {}", other));
             display::print_info("Type /help to see available commands");
-        }
-        ParsedCommand::Quit => {}
+        },
+        ParsedCommand::Quit => {},
     }
 }
 
@@ -204,7 +252,10 @@ fn print_help() {
     println!();
     println!("{}", "Available Commands:".bold().underline());
     println!("  {:<20} List all chats", "/list, /l".cyan());
-    println!("  {:<20} Select chat by number", "/select <n>, /s <n>".cyan());
+    println!(
+        "  {:<20} Select chat by number",
+        "/select <n>, /s <n>".cyan()
+    );
     println!("  {:<20} Create a new chat", "/new, /n".cyan());
     println!("  {:<20} Refresh chat list", "/refresh, /r".cyan());
     println!("  {:<20} List all agents", "/agents, /a".cyan());
@@ -249,7 +300,10 @@ mod tests {
 
     #[test]
     fn test_parse_select() {
-        assert_eq!(parse_command("/select 5"), Some(ParsedCommand::Select(Some(5))));
+        assert_eq!(
+            parse_command("/select 5"),
+            Some(ParsedCommand::Select(Some(5)))
+        );
         assert_eq!(parse_command("/s 1"), Some(ParsedCommand::Select(Some(1))));
     }
 
@@ -261,7 +315,10 @@ mod tests {
 
     #[test]
     fn test_parse_select_invalid_arg() {
-        assert_eq!(parse_command("/select abc"), Some(ParsedCommand::Select(None)));
+        assert_eq!(
+            parse_command("/select abc"),
+            Some(ParsedCommand::Select(None))
+        );
         assert_eq!(parse_command("/s -1"), Some(ParsedCommand::Select(None)));
     }
 
@@ -322,7 +379,10 @@ mod tests {
 
     #[test]
     fn test_parse_select_with_extra_spaces() {
-        assert_eq!(parse_command("/select   42"), Some(ParsedCommand::Select(Some(42))));
+        assert_eq!(
+            parse_command("/select   42"),
+            Some(ParsedCommand::Select(Some(42)))
+        );
     }
 
     #[test]
@@ -367,10 +427,10 @@ async fn refresh_chats(client: &Client, state: &mut ReplState) {
                 display::print_success(format!("Found {} chat(s)", state.chats.len()));
                 display::print_chats(&state.chats);
             }
-        }
+        },
         Err(e) => {
             display::print_api_error(&e, None);
-        }
+        },
     }
 }
 
@@ -389,10 +449,10 @@ async fn select_chat(client: &Client, state: &mut ReplState, index: usize) {
                 state.current_chat = Some(chat.clone());
                 display::print_chat_with_messages(&chat);
             }
-        }
+        },
         Err(e) => {
             display::print_api_error(&e, None);
-        }
+        },
     }
 }
 
@@ -406,12 +466,16 @@ async fn create_new_chat(client: &Client, state: &mut ReplState) {
         Err(e) => {
             display::print_api_error(&e, None);
             return;
-        }
+        },
     };
 
     if agents.is_empty() {
-        display::print_error("No agents found. Create one first with: chat-cli create agent --name <name>");
-        display::print_info("Or in another terminal, run: cargo run -- create agent --name \"MyBot\"");
+        display::print_error(
+            "No agents found. Create one first with: chat-cli create agent --name <name>",
+        );
+        display::print_info(
+            "Or in another terminal, run: cargo run -- create agent --name \"MyBot\"",
+        );
         return;
     }
 
@@ -421,7 +485,11 @@ async fn create_new_chat(client: &Client, state: &mut ReplState) {
     io::stdout().flush().ok();
     let mut agent_num = String::new();
     io::stdin().read_line(&mut agent_num).ok();
-    let agent_idx = agent_num.trim().parse::<usize>().unwrap_or(1).saturating_sub(1);
+    let agent_idx = agent_num
+        .trim()
+        .parse::<usize>()
+        .unwrap_or(1)
+        .saturating_sub(1);
     let agent_idx = agent_idx.min(agents.len().saturating_sub(1));
     let agent_id = &agents[agent_idx].id;
     display::print_success(format!("Selected agent: {}", agents[agent_idx].name));
@@ -432,7 +500,7 @@ async fn create_new_chat(client: &Client, state: &mut ReplState) {
         Err(e) => {
             display::print_api_error(&e, None);
             return;
-        }
+        },
     };
 
     if owners.is_empty() {
@@ -446,13 +514,20 @@ async fn create_new_chat(client: &Client, state: &mut ReplState) {
     io::stdout().flush().ok();
     let mut owner_num = String::new();
     io::stdin().read_line(&mut owner_num).ok();
-    let owner_idx = owner_num.trim().parse::<usize>().unwrap_or(1).saturating_sub(1);
+    let owner_idx = owner_num
+        .trim()
+        .parse::<usize>()
+        .unwrap_or(1)
+        .saturating_sub(1);
     let owner_idx = owner_idx.min(owners.len().saturating_sub(1));
     let owner_id = &owners[owner_idx].id;
     display::print_success(format!("Selected owner: {}", owners[owner_idx].name));
 
     // Title
-    print!("{}", "  Chat title (optional, press Enter for default): ".cyan());
+    print!(
+        "{}",
+        "  Chat title (optional, press Enter for default): ".cyan()
+    );
     io::stdout().flush().ok();
     let mut title = String::new();
     io::stdin().read_line(&mut title).ok();
@@ -479,11 +554,11 @@ async fn create_new_chat(client: &Client, state: &mut ReplState) {
                             });
                             display::print_chat_with_messages(&chat);
                         }
-                    }
+                    },
                     Err(e) => display::print_api_error(&e, None),
                 }
             }
-        }
+        },
         Err(e) => display::print_api_error(&e, None),
     }
 }
