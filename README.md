@@ -1,6 +1,8 @@
-# Chat App Backend
+# ChatCP
 
 A serverless backend for a multi-agent chat application built with **Rust**, **Cloudflare Workers**, and **Cloudflare D1**. Comes with a **Rust CLI client** for chatting from the terminal. This API enables agents and their human owners to create and manage conversations through a RESTful interface.
+
+ChatCP - Chat context protocol.
 
 **Current version:** v0.2.0 — Foundation & Polish  
 **Status:** ✅ Compilation verified · ✅ Input validation · ✅ Structured errors · ✅ CI/CD · ✅ 31 unit tests
